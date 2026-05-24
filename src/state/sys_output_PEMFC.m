@@ -14,7 +14,7 @@ function y = sys_output_PEMFC(x,u_traj_pp,p)
 
 % -------------------------------------------------------------------------
 % output calculation from state vector and inputs
-xStruct = p.state2struct(x.');
+xStruct = p.state2struct(x);
 u = p.inputs2struct(u_traj_pp.data.');
 
 % voltage
@@ -46,7 +46,8 @@ yStruct.T_c_out = xStruct.T_c(p.N,:);
 yStruct.p_c_out = xStruct.p_c(1,:);
 yStruct.a_H2O_c_out = (p.R * xStruct.T_c(p.N,:) .* xStruct.c_H2O_c(p.N,:)) ./ ...
     p.p_sat(xStruct.T_c(p.N,:));
-  
+
+
 % model output
 y = p.struct2output(yStruct).';
 
