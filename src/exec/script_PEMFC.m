@@ -48,14 +48,15 @@ end
 
 %% load input trajectory data
 
-inputFileName = 'dataset_15_OP_250622_v03';
+inputFileName = 'dataset_100_251117_v06';
 outputFileName_in = [inputFileName,'_inputs'];
 
 % manually select a specific part of the experiment (the selected section is assumed to start in a steady state)
 rangeRows = [];% row indizes for data, '[]' for entire experiment; 
 
 % load testbench inputs
-[u_traj,u_traj_info] = loadMatFile([outputFileName_in,'.mat'],rangeRows,p.testbench.variableNames);
+%[u_traj,u_traj_info] = loadMatFile([outputFileName_in,'.mat'],rangeRows,p.testbench.variableNames);
+[u_traj,u_traj_info] = loadMatFile([outputFileName_in,'.mat'],rangeRows,p.inputs.variableNames);
 
 %% pre-processing and interpolation for data
 info('Pre-processing started.');
@@ -115,6 +116,7 @@ x0 = x0_initialization;
 
 % innput values from interpolant
 u = @(t) uInterpolant_pp(t).';
+
 
 % solution with ode15s-solver
 [t, x] = ode15s(@(t,x) ode_PEMFC(t,x,u(t)), tspan, x0, options);

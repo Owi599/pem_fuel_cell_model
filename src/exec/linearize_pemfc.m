@@ -12,20 +12,34 @@ options.MStateDependence = 'none';
 
 %% 2) Load operating-point data
 
-inputFileName = 'dataset_15_OP_250622_v03';
+% inputFileName = 'dataset_15_OP_250622_v03';
+
+inputFileName = 'dataset_100_251117_v06';
 outputFileName_in = [inputFileName,'_inputs'];
 rangeRows = [];
 
-[u_traj, u_traj_info] = loadMatFile([outputFileName_in,'.mat'], ...
-    rangeRows, p.testbench.variableNames);
+[u_traj_pp, u_traj_pp_info] = loadMatFile([outputFileName_in,'.mat'], ...
+    rangeRows, p.inputs.variableNames);
 
-u_traj_pp = testbenchTraj2inputTraj(u_traj, p);
+% [u_traj, u_traj_info] = loadMatFile([outputFileName_in,'.mat'], ...
+%     rangeRows, p.testbench.variableNames);
+
+% u_traj_pp = testbenchTraj2inputTraj(u_traj, p);
 uInterpolant_pp = griddedInterpolant(u_traj_pp.time, u_traj_pp.data, ...
     'pchip','nearest');
 
-initialInput = p.testbench2struct(u_traj.data(1,:).');
-x0 = steady_state_PEMFC(p, initialInput, options);
+% testbench initial input
+in1 = [2.1, 560, 30, 70, 2.3, 164.73, 30, 70, 70, 0, 426, 2.7, 2.4];
+
+%Model Inputs
+%initialInput = p.inputs2struct(u_traj_pp.data(1,:).');
+%x0 = sys_states_PEMFC_initial(p, initialInput);
 u0 = u_traj_pp.data(1,:).';
+
+%Testbench Inputs
+initialInput2= p.testbench2struct(in1.');
+x0 = steady_state_PEMFC(p, initialInput2,options);
+%u02 =  testbench2model(initialInput2,p);
 
 %% 3) Nonlinear model and dimensions
 M  = full(p.M());
@@ -121,6 +135,8 @@ disp(size(D));
 %% 7) Descriptor model and state space model.
  sysD= dss(A,B,C,D,E);
  sysE = dss2ss(sysD);
+ figure;
+ step(sysE)
  
  ev_sys = eig(sysE.A);
  
@@ -211,19 +227,20 @@ Aaug = [Ak zeros(nk,ny);
        -Ck zeros(ny,ny)];
 Baug = [Bk;
        -Dk];
+Caug = [Ck zeros(ny,ny)];
 
-Qx = eye(nk);
-Qi = 10*eye(ny);
+Qx = 0.5*eye(nk);
+Qi = 0.5*eye(ny);
 Q  = blkdiag(Qx, Qi);
-R  = eye(nu);
+R  = 0.2*eye(nu);
 
 Kaug = lqr(Aaug, Baug, Q, R);
 Kx = Kaug(:,1:nk);
 Ki = Kaug(:,nk+1:end);
 
 % Closed-loop simulation setup
-Ts   = 10;
-Tend = 7200;
+Ts   = 100;
+Tend = 100000;
 t    = (0:Ts:Tend)';
 Nsim = numel(t);
 
@@ -278,3 +295,38 @@ plot(t, E.', 'LineWidth', 1.2);
 grid on;
 ylabel('e');
 xlabel('Time [s]');
+
+%% 13) MPC 
+
+sysr = redsys{1};
+Ak = sysr.A;
+Bk = sysr.B;
+Ck = sysr.C;
+Dk = sysr.D;
+
+G = ss(Ak,Bk,Ck,Dk);
+Ts = 100;
+c = mpc(G,Ts);
+
+c.Model.Nominal.Y = y0;
+c.Model.Nominal.U = u0;
+c.Model.Nominal.X = x0;
+
+% Remove default output disturbance model.
+setoutdist(c,"model",tf(0));   
+
+% Set number of steps for simulation time of 5 seconds.
+SimulationSteps = 1000;      
+
+% Define Reference signal.
+ref = y0+0.1*ones(SimulationSteps,1);
+
+% Run closed-loop simulation.
+[y, t] = sim(c,SimulationSteps,ref);
+
+
+figure;
+plot(t,ref,t,y);
+xlabel('time');
+title('Closed-Loop Response');
+legend('ref','y');
