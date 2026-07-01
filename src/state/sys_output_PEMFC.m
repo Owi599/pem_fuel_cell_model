@@ -1,4 +1,4 @@
-function [y_meas, y_ctrl, yStruct] = sys_output_PEMFC(x,u_traj_pp,p)
+function [y_meas, y_ctrl, yStruct, y_Analysis] = sys_output_PEMFC(x,u_traj_pp,p)
 % --------------------------------------------------------------------------------------   
 % model output function y = g(t,x,u)
 % for assumed output vector (not test bench outputs!)
@@ -36,7 +36,8 @@ if p.counter_flow
     yStruct.n_dot_H2O_a_out = -2*p.K_a/p.delta_z*(u.p_a_out - xStruct.p_a(idxA,:)) .* xStruct.c_H2O_a(idxA,:);
     yStruct.a_H2O_a_out = (p.R * xStruct.T_a(idxA,:) .* xStruct.c_H2O_a(idxA,:)) ./ ...
     p.p_sat(xStruct.T_a(idxA,:));
-
+    yStruct.a_H2O_a_out_z = (p.R * xStruct.T_a .* xStruct.c_H2O_a) ./ ...
+    p.p_sat(xStruct.T_a);
 else
     
     idxA = p.N;
@@ -47,7 +48,8 @@ else
     yStruct.n_dot_H2O_a_out = -2*p.K_a/p.delta_z*(u.p_a_out - xStruct.p_a(idxA,:)) .* xStruct.c_H2O_a(idxA,:);
     yStruct.a_H2O_a_out = (p.R * xStruct.T_a(idxA,:) .* xStruct.c_H2O_a(idxA,:)) ./ ...
     p.p_sat(xStruct.T_a(idxA,:));
-
+    yStruct.a_H2O_a_out_z = (p.R * xStruct.T_a .* xStruct.c_H2O_a) ./ ...
+    p.p_sat(xStruct.T_a);
 end
 
 idxC = p.N;
@@ -61,14 +63,18 @@ yStruct.n_dot_H2O_c_out = -2*p.K_c/p.delta_z*(u.p_c_out - xStruct.p_c(idxC,:)) .
 yStruct.n_dot_N2_c_out = -2*p.K_c/p.delta_z*(u.p_c_out - xStruct.p_c(idxC,:)) .* xStruct.c_N2_c(idxC,:); % not used in the output vector
 
 yStruct.a_H2O_c_out = (p.R * xStruct.T_c(idxC,:) .* xStruct.c_H2O_c(idxC,:)) ./ ...
-    p.p_sat(xStruct.T_c(idxC,:));
-
+p.p_sat(xStruct.T_c(idxC,:));
+yStruct.a_H2O_c_out_z = (p.R * xStruct.T_c .* xStruct.c_H2O_c) ./ ...
+    p.p_sat(xStruct.T_c);
 
 % solid temperature/Humidity
 
 yStruct.T_S = xStruct.T_s;
 yStruct.Lambda = xStruct.lambda_m;
-%average humidity
+
+%Humidity
+yStruct.c_H2O_c = xStruct.c_H2O_c;
+yStruct.c_H2O_a = xStruct.c_H2O_a;
 yStruct.a_H2O_avg = 0.5 * (yStruct.a_H2O_a_out + yStruct.a_H2O_c_out);
 
 
@@ -82,9 +88,11 @@ y_meas = [ ...
     yStruct.a_H2O_a_out;
     yStruct.a_H2O_c_out ];
 
-y_ctrl = [yStruct.T_S;
-    yStruct.Lambda;
-    yStruct.a_H2O_avg ];
+y_ctrl = [yStruct.T_S(10); 
+    yStruct.a_H2O_avg 
+    ];
 
+y_Analysis = [yStruct.a_H2O_a_out_z;
+    yStruct.a_H2O_c_out_z];
 end
 

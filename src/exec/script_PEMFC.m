@@ -55,8 +55,8 @@ outputFileName_in = [inputFileName,'_inputs'];
 rangeRows = [];% row indizes for data, '[]' for entire experiment; 
 
 % load testbench inputs
-%[u_traj,u_traj_info] = loadMatFile([outputFileName_in,'.mat'],rangeRows,p.testbench.variableNames);
-[u_traj,u_traj_info] = loadMatFile([outputFileName_in,'.mat'],rangeRows,p.inputs.variableNames);
+[u_traj,u_traj_info] = loadMatFile([outputFileName_in,'.mat'],rangeRows,p.testbench.variableNames);
+%[u_traj,u_traj_info] = loadMatFile([outputFileName_in,'.mat'],rangeRows,p.inputs.variableNames);
 
 %% pre-processing and interpolation for data
 info('Pre-processing started.');

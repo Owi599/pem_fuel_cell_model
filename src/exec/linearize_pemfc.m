@@ -305,6 +305,7 @@ Ck = sysr.C;
 Dk = sysr.D;
 
 G = ss(Ak,Bk,Ck,Dk);
+G.D = zeros(size(G.D));
 Ts = 100;
 c = mpc(G,Ts);
 

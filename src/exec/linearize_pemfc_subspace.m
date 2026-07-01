@@ -4,11 +4,10 @@ close all; clear; clc;
 %% 1) Parameters and options
 p = mod_param_PEMFC();
 
-options = odeset();
-options.Mass = p.M();
-options.RelTol = 1e-6;
-options.AbsTol = 1e-6;
-options.MStateDependence = 'none';
+options.Mass=p.M();
+options.RelTol=1e-6;
+options.AbsTol=1e-6;
+options.MStateDependence='none';
 
 %% 2) Load model-input dataset
 inputFileName   = 'dataset_100_251117_v06';
@@ -20,56 +19,72 @@ rangeRows = [];
 uInterpolant_pp = griddedInterpolant(u_traj.time, u_traj.data, ...
     'pchip','nearest');
 
-t = u_traj.time(:);
-U = u_traj.data;
-if size(U,1) ~= numel(t)
-    U = U.';
-end
 
-Ts = mean(diff(t));
-N  = size(U,1);
-nu = size(U,2);
 
-%% 3) Initial guess for state
+%% 3) Compute Initial steady state
 % testbench initial input
 in1 = [2.1, 560, 30, 70, 2.3, 164.73, 30, 70, 70, 0, 426, 2.7, 2.4];
-initialInput2= p.testbench2struct(in1.');
-x0 = steady_state_PEMFC(p, initialInput2,options);
-u0 = U(1,:).';
+initialInput= p.testbench2struct(in1.');
+x0 = steady_state_PEMFC(p, initialInput,options);
+u0 = u_traj.data(1,:).';
+tspan = u_traj.time;
+U = u_traj.data;
+if size(U,1) ~= numel(tspan)
+    U = U.';
+end
+%% 4) Input values from interpolent
+u = @(t) uInterpolant_pp(t).';
 
-%% 4) Input interpolant
-u_fun = @(tt) interp1(t, U, tt, 'pchip', 'extrap').';
-M = p.M();
-
-%% 5) Define DAE residual: F(t,x,xdot)=M*xdot-f(x,u)=0
-F = @(tt, x, xdot) pemfc_residual(tt, x, xdot, u_fun, p, M);
-
-%% 6) Consistent initial conditions
-x_guess    = x0(:);
-xdot_guess = zeros(size(x_guess));
-
-fixed_x    = false(size(x_guess));
-fixed_xdot = false(size(x_guess));
-
-[x0c, xdot0c] = decic(F, t(1), x_guess, fixed_x, xdot_guess, fixed_xdot, options);
 
 %% 7) Simulate DAE with input trajectory
-[t_sim, x_sim] = ode15i(F, t, x0c, xdot0c, options);
+[t, x] = ode15s(@(t,x) ode_PEMFC(t,x,u(t)), tspan, x0, options);
 
 %% 8) Compute outputs
-y_sim = sys_output_wrapper(x_sim, U, p);  
+N = size(x,1);
+y = zeros(N, 2);   
 
-%% 9) Build iddata for N4SID
-u_id = U;
-y_id = y_sim;
+for k = 1:N
+    y(k,:) = sys_output_wrapper(x(k,:).', U(k,:).', p).';
+end
 
-u_id = u_id - mean(u_id(1:20,:), 1);
-y_id = y_id - mean(y_id(1:20,:), 1);
+%% 9) Time period
 
-z = iddata(y_id, u_id, Ts);
+Ts = 100;
+
 
 %% 10) Estimate linear model
-nx = 4:20;   
-sys = n4sid(z, 'best', 'N4Horizon', [10 10 10]);
+nx = 7:20;   
+sys = n4sid(U,y,nx,'Ts',Ts);
+%%
+A = sys.A;
+B = sys.B;
+C = sys.C;
+D = sys.D;
+%%
+ev_sys = eig(A);
+isStable = all(real(ev_sys) < 0); 
 
-compare(z, sys);
+% Display stability result
+if isStable
+    disp('The system is stable.');
+else
+    disp('The system is unstable.');
+end
+%%
+
+isControllable = rank(ctrb(A,B)) == min(size(ctrb(A,B)));
+if isControllable
+    disp('The system is controllable.');
+else
+    disp('The system is uncontrollable.');
+end
+%%
+
+isObservable = rank(obsv(A,C)) == min(size(obsv(A,C)));
+% Display observability result
+if isObservable
+    disp('The system is observable.');
+else
+    disp('The system is unobservable.');
+end
+%%
