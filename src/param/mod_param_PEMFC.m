@@ -189,7 +189,7 @@ p.zv=zv;
 % --------------------------------------------------------------------------------------
 % counter- or co-flow feeding in the gas channels (conter-flows used in experiments)
 % direction is changed only in the anode channel 
-p.counter_flow = 0;     % 1 - counter-flow feeding       
+p.counter_flow = 1;     % 1 - counter-flow feeding       
                         % 0 - co-flow feeding
 
 % --------------------------------------------------------------------------------------  

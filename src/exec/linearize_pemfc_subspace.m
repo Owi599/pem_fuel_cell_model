@@ -1,4 +1,4 @@
-% Subspace ID data generation for PEMFC using ode15i/decic
+% Subspace ID data generation for PEMFC 
 close all; clear; clc;
 
 %% 1) Parameters and options
@@ -18,8 +18,6 @@ rangeRows = [];
     rangeRows, p.inputs.variableNames);
 uInterpolant_pp = griddedInterpolant(u_traj.time, u_traj.data, ...
     'pchip','nearest');
-
-
 
 %% 3) Compute Initial steady state
 % testbench initial input
@@ -52,9 +50,10 @@ end
 Ts = 100;
 
 
-%% 10) Estimate linear model
+%% 10) Estimated linear model
 nx = 7:20;   
 sys = n4sid(U,y,nx,'Ts',Ts);
+
 %%
 A = sys.A;
 B = sys.B;
@@ -62,7 +61,7 @@ C = sys.C;
 D = sys.D;
 %%
 ev_sys = eig(A);
-isStable = all(real(ev_sys) < 0); 
+isStable = all(abs(ev_sys) < 1); % Stability condition for discrete-time systems 
 
 % Display stability result
 if isStable
@@ -87,4 +86,97 @@ if isObservable
 else
     disp('The system is unobservable.');
 end
+%% LQI closed-loop simulation on one reduced model
+
+nk = size(A,1);
+ny = size(C,1);
+nu = size(B,2);
+
+Aaug = [A zeros(nk,ny);
+    -C zeros(ny,ny)];
+Baug = [B;
+    -D];
+Caug = [C zeros(ny,ny)];
+
+isControllableaug = rank(ctrb(Aaug,Baug)) == min(size(ctrb(Aaug,Baug)));
+if isControllableaug
+    disp('The system is controllable.');
+else
+    disp('The system is uncontrollable.');
+end
+
+isObservableaug = rank(obsv(Aaug,Caug)) == min(size(obsv(Aaug,Caug)));
+% Display observability result
+if isObservableaug
+    disp('The system is observable.');
+else
+    disp('The system is unobservable.');
+end
+
+Qx = 0.5*eye(nk);
+Qi = 0.5*eye(ny);
+Q  = blkdiag(Qx, Qi);
+R  = 0.2*eye(nu);
+
+Kaug = lqr(Aaug, Baug, Q, R);
+Kx = Kaug(:,1:nk);
+Ki = Kaug(:,nk+1:end);
+
 %%
+% Closed-loop simulation setup
+Ts   = 100;
+Tend = 100000;
+t    = (0:Ts:Tend)';
+Nsim = numel(t);
+
+% Reference in deviation variables
+r = zeros(Nsim, ny);
+r(round(Nsim/3):end, :) = 1;   % step in both outputs, adjust as needed
+
+x  = zeros(nk,1);
+xi = zeros(ny,1);
+
+X = zeros(nk, Nsim);
+XI = zeros(ny, Nsim);
+Y = zeros(ny, Nsim);
+U = zeros(nu, Nsim);
+E = zeros(ny, Nsim);
+
+for k = 1:Nsim
+    y = C*x ;
+    e = r(k,:).' - y(:);
+
+    u = -Kx*x - Ki*xi;
+
+    X(:,k)  = x;
+    XI(:,k) = xi;
+    Y(:,k)  = y;
+    U(:,k)  = u;
+    E(:,k)  = e;
+
+    xdot  = A*x + B*u;
+    xidot = e;
+
+    if k < Nsim
+        x  = x  + Ts*xdot;
+        xi = xi + Ts*xidot;
+    end
+end
+
+figure;
+subplot(3,1,1);
+plot(t, Y.', 'LineWidth', 1.2);
+grid on;
+ylabel('y');
+title('Closed-loop output tracking');
+
+subplot(3,1,2);
+plot(t, U.', 'LineWidth', 1.2);
+grid on;
+ylabel('u');
+
+subplot(3,1,3);
+plot(t, E.', 'LineWidth', 1.2);
+grid on;
+ylabel('e');
+xlabel('Time [s]');

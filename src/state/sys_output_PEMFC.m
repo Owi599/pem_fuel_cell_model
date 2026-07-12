@@ -77,6 +77,7 @@ yStruct.c_H2O_c = xStruct.c_H2O_c;
 yStruct.c_H2O_a = xStruct.c_H2O_a;
 yStruct.a_H2O_avg = 0.5 * (yStruct.a_H2O_a_out + yStruct.a_H2O_c_out);
 
+yStruct.a_H2O_avg_z = 0.5 * (yStruct.a_H2O_a_out_z + yStruct.a_H2O_c_out_z);
 
 y_meas = [ ...
     yStruct.U_cell;
@@ -93,6 +94,7 @@ y_ctrl = [yStruct.T_S(10);
     ];
 
 y_Analysis = [yStruct.a_H2O_a_out_z;
-    yStruct.a_H2O_c_out_z];
+    yStruct.a_H2O_c_out_z;
+    yStruct.a_H2O_avg_z];
 end
 

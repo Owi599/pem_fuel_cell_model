@@ -38,87 +38,94 @@ u = @(t) uInterpolant_pp(t).';
 
 %% 8) Compute outputs
 N = size(x,1);
-y = zeros(N, 40);   
+y = zeros(N, 60);   
 
 for k = 1:N
     y(k,:) = sys_output_wrapper_Analysis(x(k,:).', U(k,:).', p).';
 end
 %% I_cell = 0.0162 A
 figure;
-plot(y(17282,1:20),'DisplayName','a^A_{H2O}')
+plot(y(17282,1:20),'DisplayName','$a^A_{H2O}$')
 hold on;
-plot(y(17282,21:40),'DisplayName','a^C_{H2O}')
+plot(y(17282,21:40),'DisplayName','$a^C_{H2O}$')
+plot(y(17282,41:60),'DisplayName','$\overline{a}_{H20}$')
 xlim([1,20]);
 xlabel('Z');
 ylabel('Relative Humidity');
 title('Relative Humidity over different Current Loads');
-legend('Location','best');
+legend('Location','best',Interpreter='latex');
 grid on;
 
 %% I_cell = 1.0003 A
 figure;
-plot(y(9201,1:20),'DisplayName','a^A_{H2O}')
+plot(y(9201,1:20),'DisplayName','$a^A_{H2O}$')
 hold on;
 xlim([1,20]);
-plot(y(9201,21:40),'DisplayName','a^C_{H2O}')
+plot(y(9201,21:40),'DisplayName','$a^C_{H2O}$')
+plot(y(9201,41:60),'DisplayName','$\overline{a}_{H20}$')
 xlabel('Z');
 ylabel('Relative Humidity');
 title('Relative Humidity over different Current Loads');
-legend('Location','best');
+legend('Location','best',Interpreter='latex');
 grid on;
 %% I_cell = 2.0939 A
 figure;
-plot(y(8875,1:20),'DisplayName','a^A_{H2O}')
+plot(y(8875,1:20),'DisplayName','$a^A_{H2O}$')
 hold on;
 xlim([1,20]);
-plot(y(8875,21:40),'DisplayName','a^C_{H2O}')
+plot(y(8875,21:40),'DisplayName','$a^C_{H2O}$')
+plot(y(8875,41:60),'DisplayName','$\overline{a}_{H20}$')
 xlabel('Z');
 ylabel('Relative Humidity');
 title('Relative Humidity over different Current Loads');
-legend('Location','best');
+legend('Location','best',Interpreter='latex');
 grid on;
 %% I_cell = 3.0006 A
 figure;
-plot(y(15691,1:20),'DisplayName','a^A_{H2O}')
+plot(y(15691,1:20),'DisplayName','$a^A_{H2O}$')
 hold on;
 xlim([1,20]);
-plot(y(15691,21:40),'DisplayName','a^C_{H2O}')
+plot(y(15691,21:40),'DisplayName','$a^C_{H2O}$')
+plot(y(15691,41:60),'DisplayName','$\overline{a}_{H20}$')
 xlabel('Z');
 ylabel('Relative Humidity');
 title('Relative Humidity over different Current Loads');
-legend('Location','best');
+legend('Location','best',Interpreter='latex');
 grid on;
 %% I_cell = 3.9928 A
 figure;
-plot(y(4885,1:20),'DisplayName','a^A_{H2O}')
+plot(y(4885,1:20),'DisplayName','$a^A_{H2O}$')
 hold on;
 xlim([1,20]);
-plot(y(4885,21:40),'DisplayName','a^C_{H2O}')
+plot(y(4885,21:40),'DisplayName','$a^C_{H2O}$')
+plot(y(4885,41:60),'DisplayName','$\overline{a}_{H20}$')
 xlabel('Z');
 ylabel('Relative Humidity');
 title('Relative Humidity over different Current Loads');
-legend('Location','best');
+legend('Location','best',Interpreter='latex');
 grid on;
 %% I_cell = 4.9946 A
 figure;
-plot(y(4541,1:20),'DisplayName','a^A_{H2O}')
+plot(y(4541,1:20),'DisplayName','$a^A_{H2O}$')
 hold on;
 xlim([1,20]);
-plot(y(4541,21:40),'DisplayName','a^C_{H2O}')
+plot(y(4541,21:40),'DisplayName','$a^C_{H2O}$')
+plot(y(4541,41:60),'DisplayName','$\overline{a}_{H20}$')
 xlabel('Z');
 ylabel('Relative Humidity');
 title('Relative Humidity over different Current Loads');
-legend('Location','best');
+legend('Location','best',Interpreter='latex');
 grid on;
 %% I_cell = 5.7628 A
 figure;
-plot(y(11021,1:20),'DisplayName','a^A_{H2O}')
+plot(y(11021,1:20),'DisplayName','$a^A_{H2O}$')
 hold on;
 xlim([1,20]);
-plot(y(11021,21:40),'DisplayName','a^C_{H2O}')
+plot(y(11021,21:40),'DisplayName','$a^C_{H2O}$')
+plot(y(11021,41:60),'DisplayName','$\overline{a}_{H20}$')
 xlabel('Z');
 ylabel('Relative Humidity');
 title('Relative Humidity over different Current Loads');
-legend('Location','best');
+legend('Location','best',Interpreter='latex');
 grid on;
 
