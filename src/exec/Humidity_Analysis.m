@@ -41,7 +41,7 @@ u0 = u0(:);
 iCellCol = find(strcmp(p.inputs.variableNames, 'I_cell'));
 
 %% 3) Target current loads
-targetI = [0.01, 1, 2, 3, 4, 5, 6,7,8];
+targetI = [0.0162, 1, 2, 3, 4, 5,5.76];
 
 %% 4) Compute steady-state simulation for each target current 
 Tramp = 2000; % [s] ramp duration for I_cell
@@ -50,13 +50,13 @@ Ttot  = Tramp + Tss;
 
 nCols    = 80;   % 4 * p.N (anode, cathode, average, lambda_m)
 y        = zeros(numel(targetI),nCols);
-x_ss_all = zerso(numel(targetI),numel(x0));
+x_ss_all = zeros(numel(targetI),numel(x0));
 
 for i = 1:numel(targetI)
-    u_target      = u_op;
+    u_target      = u0;
     u_target(iCellCol) = targetI(i);
 
-    u_ramp = @(t) u_op + min(max(t,0),Tramp)/Tramp .* (u_target - u_op);
+    u_ramp = @(t) u0 + min(max(t,0),Tramp)/Tramp .* (u_target - u0);
 
     sol  = ode15s(@(t,x) ode_PEMFC(t,x,u_ramp(t)), [0 Ttot], x0, options);
     x_ss = deval(sol, Ttot);
@@ -93,7 +93,7 @@ for i = 1:numel(targetI)
     ylabel('Water activity / relative humidity [-]');
 
     yyaxis right;
-    plot(zPos, lam, '-.y', 'DisplayName', '$\lambda_m$', 'LineWidth', 1.3);
+    plot(zPos, lam, '-.o', 'DisplayName', '$\lambda_m$', 'LineWidth', 1.3);
     ylabel('Membrane water content \lambda_m [-]');
 
     xlabel('Channel position z [mm]');
