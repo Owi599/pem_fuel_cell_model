@@ -31,7 +31,7 @@ if p.counter_flow
     idxA = 1;
     % counter-flow case
     yStruct.T_a_out = xStruct.T_a(idxA,:);
-    yStruct.p_a_out = xStruct.p_a(p.N,:);
+    yStruct.p_a_out = xStruct.p_a(idxA,:);
     yStruct.n_dot_H2_a_out = -2*p.K_a/p.delta_z*(u.p_a_out - xStruct.p_a(idxA,:)) .* xStruct.c_H2_a(idxA,:);
     yStruct.n_dot_H2O_a_out = -2*p.K_a/p.delta_z*(u.p_a_out - xStruct.p_a(idxA,:)) .* xStruct.c_H2O_a(idxA,:);
     yStruct.a_H2O_a_out = (p.R * xStruct.T_a(idxA,:) .* xStruct.c_H2O_a(idxA,:)) ./ ...
@@ -43,7 +43,7 @@ else
     idxA = p.N;
     % co-flow case
     yStruct.T_a_out = xStruct.T_a(idxA,:);
-    yStruct.p_a_out = xStruct.p_a(p.N,:);
+    yStruct.p_a_out = xStruct.p_a(idxA,:);
     yStruct.n_dot_H2_a_out = -2*p.K_a/p.delta_z*(u.p_a_out - xStruct.p_a(idxA,:)) .* xStruct.c_H2_a(idxA,:);
     yStruct.n_dot_H2O_a_out = -2*p.K_a/p.delta_z*(u.p_a_out - xStruct.p_a(idxA,:)) .* xStruct.c_H2O_a(idxA,:);
     yStruct.a_H2O_a_out = (p.R * xStruct.T_a(idxA,:) .* xStruct.c_H2O_a(idxA,:)) ./ ...
@@ -95,6 +95,7 @@ y_ctrl = [yStruct.T_S(10);
 
 y_Analysis = [yStruct.a_H2O_a_out_z;
     yStruct.a_H2O_c_out_z;
-    yStruct.a_H2O_avg_z];
+    yStruct.a_H2O_avg_z;
+    yStruct.Lambda];
 end
 

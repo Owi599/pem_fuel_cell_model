@@ -1,6 +1,6 @@
 % Subspace ID data generation for PEMFC 
 close all; clear; clc;
-
+ensure_ode_pemfc_fresh();
 %% 1) Parameters and options
 p = mod_param_PEMFC();
 
@@ -44,22 +44,36 @@ y = zeros(N, 2);
 for k = 1:N
     y(k,:) = sys_output_wrapper(x(k,:).', U(k,:).', p).';
 end
+%% 8.1 Data Normalization
+mu_u = mean(U,1); sigma_u = std(U,1);
+mu_y = mean(y,1); sigma_y = std(y,1);
 
-%% 9) Time period
+% guard against any zero-variance columns
+sigma_u(sigma_u == 0) = 1;
+sigma_y(sigma_y == 0) = 1;
 
-Ts = 100;
+normalize_u = @(U) (U - mu_u) ./ sigma_u;
+normalize_y = @(Y) (Y - mu_y) ./ sigma_y;
 
+U_Normalized = normalize_u(U);
+y_Normalized = normalize_y(y);
 
-%% 10) Estimated linear model
-nx = 7:20;   
-sys = n4sid(U,y,nx,'Ts',Ts);
+fprintf('\nPer-channel training stats (mean, std):\n');
+fprintf('  y1 (T_S(10))    : mean=%.3g, std=%.3g\n', mu_y(1), sigma_y(1));
+fprintf('  y2 (a_H2O_avg)  : mean=%.3g, std=%.3g\n', mu_y(2), sigma_y(2));
+%% 9) Estimated linear model
 
-%%
+Ts = 1;
+
+nx = 7:20;  
+opt = n4sidOptions('Focus','simulation','N4Horizon',[30 30 30]);
+sys = n4sid(U_Normalized,y_Normalized,nx,'Ts',Ts,opt);
+
 A = sys.A;
-B = sys.B;
+B = sys.B; 
 C = sys.C;
 D = sys.D;
-%%
+
 ev_sys = eig(A);
 isStable = all(abs(ev_sys) < 1); % Stability condition for discrete-time systems 
 
@@ -69,7 +83,7 @@ if isStable
 else
     disp('The system is unstable.');
 end
-%%
+% Display controllability result
 
 isControllable = rank(ctrb(A,B)) == min(size(ctrb(A,B)));
 if isControllable
@@ -77,15 +91,79 @@ if isControllable
 else
     disp('The system is uncontrollable.');
 end
-%%
+%Display observability result
 
 isObservable = rank(obsv(A,C)) == min(size(obsv(A,C)));
-% Display observability result
 if isObservable
     disp('The system is observable.');
 else
     disp('The system is unobservable.');
 end
+
+data_train = iddata(y,U,Ts);
+data_train_Normalized = iddata(y_Normalized,U_Normalized,Ts);
+%% 10) Validation Data set: different dataset, converted from testbench format
+[u_traj_val, ~] = loadMatFile('dataset_50_OP_250622_v04_inputs.mat', [], ...
+    p.testbench.variableNames);
+
+u_traj_val_model = testbenchTraj2inputTraj(u_traj_val, p);
+
+initialInput_val = p.testbench2struct(u_traj_val.data(1,:).');
+x0_val = steady_state_PEMFC(p, initialInput_val, options);
+
+uInterp_val = griddedInterpolant(u_traj_val_model.time, u_traj_val_model.data, ...
+    'pchip', 'nearest');
+[t_val, x_val] = ode15s(@(t,x) ode_PEMFC(t,x,uInterp_val(t).'), ...
+    u_traj_val_model.time, x0_val, options);
+
+U_val = u_traj_val_model.data;
+if size(U_val,1) ~= numel(t_val); U_val = U_val.'; end
+
+Nv = size(x_val,1);
+y_val = zeros(Nv,2);
+for k = 1:Nv
+    y_val(k,:) = sys_output_wrapper(x_val(k,:).', U_val(k,:).', p).';
+end
+
+dt_val = mean(diff(t_val));
+if abs(dt_val - Ts) > 1e-9
+    warning('Held-out data sample spacing (%.3g s) differs from training (%.3g s).', dt_val, Ts);
+end
+
+U_val_d = U_val(1:Ts:end, :);
+y_val_d = y_val(1:Ts:end, :);
+
+% apply the SAME (training-derived) normalization
+U_val_n = normalize_u(U_val_d);
+y_val_n = normalize_y(y_val_d);
+
+data_val = iddata(y_val_d, U_val_d, Ts);
+data_val_n = iddata(y_val_n, U_val_n, Ts);
+
+
+%% 11) Compare: training fit (baseline) vs. Validation test fit (the real test)/ Inf Compare Horizont 
+figure('Name','Stage 0a (Inf Compare Horizont) - fit on TRAINING data (sanity baseline, expect high %)');
+compare(data_train_Normalized, sys);
+
+figure('Name','Stage 0b (Inf Compare Horizont) - fit on HELD-OUT data (the real generalization test)');
+compare(data_val_n, sys,1);
+[~, fit_val] = compare(data_val_n, sys);
+
+fprintf('\nHeld-out fit (NRMSE %%) per output channel [T_S(10), a_H2O_avg]:\n');
+disp(fit_val);
+
+%% 12) Compare: training fit (baseline) vs. Validation test fit (the real test)/ 1-step Compare Horizont 
+figure('Name','Stage 0a (1-step Compare Horizont) - fit on TRAINING data (sanity baseline, expect high %)');
+compare(data_train_Normalized, sys);
+
+figure('Name','Stage 0b (1-step Compare Horizont) - fit on HELD-OUT data (the real generalization test)');
+compare(data_val_n, sys,1);
+[~, fit_val_1_step] = compare(data_val_n, sys);
+
+fprintf('\nHeld-out fit (NRMSE %%) per output channel [T_S(10), a_H2O_avg]:\n');
+disp(fit_val_1_step);
+
+
 %% LQI closed-loop simulation on one reduced model
 
 nk = size(A,1);

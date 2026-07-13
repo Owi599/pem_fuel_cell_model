@@ -1,5 +1,6 @@
 % Humidity Analysis
 close all; clear; clc;
+ensure_ode_pemfc_fresh();
 
 %% 1) Parameters and options
 p = mod_param_PEMFC();
@@ -8,6 +9,15 @@ options.Mass=p.M();
 options.RelTol=1e-6;
 options.AbsTol=1e-6;
 options.MStateDependence='none';
+
+flowLabel = 'co-flow';
+
+if p.counter_flow
+
+    flowLabel='counter flow';
+
+end
+disp(p.counter_flow)
 
 %% 2) Load model-input dataset
 inputFileName   = 'dataset_100_251117_v06';
@@ -33,99 +43,50 @@ end
 u = @(t) uInterpolant_pp(t).';
 
 
-%% 7) Simulate DAE with input trajectory
+%% 5) Simulate DAE with input trajectory
 [t, x] = ode15s(@(t,x) ode_PEMFC(t,x,u(t)), tspan, x0, options);
-
-%% 8) Compute outputs
-N = size(x,1);
-y = zeros(N, 60);   
-
-for k = 1:N
-    y(k,:) = sys_output_wrapper_Analysis(x(k,:).', U(k,:).', p).';
+%% 6) Locate the I_cell column in the input structure
+iCellCol = find(strcmp(p.inputs.variableNames, 'I_cell'));
+%% 7) Target current loads -- indices found dynamically, one per target
+targetI = [0, 1, 2, 3,3.54, 4, 5, 6];
+idxList = zeros(size(targetI));
+for i = 1:numel(targetI)
+    [~, idxList(i)] = min(abs(U(:,iCellCol) - targetI(i)));
 end
-%% I_cell = 0.0162 A
-figure;
-plot(y(17282,1:20),'DisplayName','$a^A_{H2O}$')
-hold on;
-plot(y(17282,21:40),'DisplayName','$a^C_{H2O}$')
-plot(y(17282,41:60),'DisplayName','$\overline{a}_{H20}$')
-xlim([1,20]);
-xlabel('Z');
-ylabel('Relative Humidity');
-title('Relative Humidity over different Current Loads');
-legend('Location','best',Interpreter='latex');
-grid on;
+%% 8) Compute outputs
+nCols = 80;   % 4 * p.N (anode, cathode, average, lambda_m)
+y = zeros(numel(idxList), nCols);
+for i = 1:numel(idxList)
+    k = idxList(i);
+    y(i,:) = sys_output_wrapper_Analysis(x(k,:).', U(k,:).', p).';
+end
 
-%% I_cell = 1.0003 A
-figure;
-plot(y(9201,1:20),'DisplayName','$a^A_{H2O}$')
-hold on;
-xlim([1,20]);
-plot(y(9201,21:40),'DisplayName','$a^C_{H2O}$')
-plot(y(9201,41:60),'DisplayName','$\overline{a}_{H20}$')
-xlabel('Z');
-ylabel('Relative Humidity');
-title('Relative Humidity over different Current Loads');
-legend('Location','best',Interpreter='latex');
-grid on;
-%% I_cell = 2.0939 A
-figure;
-plot(y(8875,1:20),'DisplayName','$a^A_{H2O}$')
-hold on;
-xlim([1,20]);
-plot(y(8875,21:40),'DisplayName','$a^C_{H2O}$')
-plot(y(8875,41:60),'DisplayName','$\overline{a}_{H20}$')
-xlabel('Z');
-ylabel('Relative Humidity');
-title('Relative Humidity over different Current Loads');
-legend('Location','best',Interpreter='latex');
-grid on;
-%% I_cell = 3.0006 A
-figure;
-plot(y(15691,1:20),'DisplayName','$a^A_{H2O}$')
-hold on;
-xlim([1,20]);
-plot(y(15691,21:40),'DisplayName','$a^C_{H2O}$')
-plot(y(15691,41:60),'DisplayName','$\overline{a}_{H20}$')
-xlabel('Z');
-ylabel('Relative Humidity');
-title('Relative Humidity over different Current Loads');
-legend('Location','best',Interpreter='latex');
-grid on;
-%% I_cell = 3.9928 A
-figure;
-plot(y(4885,1:20),'DisplayName','$a^A_{H2O}$')
-hold on;
-xlim([1,20]);
-plot(y(4885,21:40),'DisplayName','$a^C_{H2O}$')
-plot(y(4885,41:60),'DisplayName','$\overline{a}_{H20}$')
-xlabel('Z');
-ylabel('Relative Humidity');
-title('Relative Humidity over different Current Loads');
-legend('Location','best',Interpreter='latex');
-grid on;
-%% I_cell = 4.9946 A
-figure;
-plot(y(4541,1:20),'DisplayName','$a^A_{H2O}$')
-hold on;
-xlim([1,20]);
-plot(y(4541,21:40),'DisplayName','$a^C_{H2O}$')
-plot(y(4541,41:60),'DisplayName','$\overline{a}_{H20}$')
-xlabel('Z');
-ylabel('Relative Humidity');
-title('Relative Humidity over different Current Loads');
-legend('Location','best',Interpreter='latex');
-grid on;
-%% I_cell = 5.7628 A
-figure;
-plot(y(11021,1:20),'DisplayName','$a^A_{H2O}$')
-hold on;
-xlim([1,20]);
-plot(y(11021,21:40),'DisplayName','$a^C_{H2O}$')
-plot(y(11021,41:60),'DisplayName','$\overline{a}_{H20}$')
-xlabel('Z');
-ylabel('Relative Humidity');
-title('Relative Humidity over different Current Loads');
-legend('Location','best',Interpreter='latex');
-grid on;
+zPos = (1:p.N) * p.delta_z * 1000;   % physical channel position [mm]
+%% 9) Visualization
+for i = 1:numel(targetI)
+    aA   = y(i, 1:20);
+    aC   = y(i, 21:40);
+    aAvg = y(i, 41:60);
+    lam  = y(i, 61:80);
 
+    I_actual = U(idxList(i), iCellCol);
+
+    figure('Name', sprintf('Humidity, I_cell = %.3f A', I_actual));
+
+    yyaxis left;
+    plot(zPos, aA, '-og', 'DisplayName', '$a^A_{H_2O}$'); hold on;
+    plot(zPos, aC, '-sm', 'DisplayName', '$a^C_{H_2O}$');
+    plot(zPos, aAvg, '--c', 'DisplayName', '$\overline{a}_{H_2O}$');
+    yline(1, ':k', 'saturation (a=1)', 'DisplayName', 'saturation limit');
+    ylabel('Water activity / relative humidity [-]');
+
+    yyaxis right;
+    plot(zPos, lam, '-.', 'DisplayName', '$\lambda_m$', 'LineWidth', 1.3);
+    ylabel('Membrane water content \lambda_m [-]');
+
+    xlabel('Channel position z [mm]');
+    title(sprintf('Along-channel humidity & membrane hydration (%s), I_{cell} = %.3f A', ...
+        flowLabel, I_actual));
+    legend('Location', 'best', 'Interpreter', 'latex');
+    grid on;
+end
