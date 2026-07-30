@@ -1,260 +1,219 @@
-% Subspace ID data generation for PEMFC 
+%% PEMFC: N4SID linear model 
 close all; clear; clc;
-ensure_ode_pemfc_fresh();
-%% 1) Parameters and options
+
+%% Setup
+ensure_ode_pemfc_fresh(); % only run if something was changed in mod_param_PEMFC.m
+
+%% Loading params and ode options
 p = mod_param_PEMFC();
+options.Mass = p.M();
+options.RelTol = 1e-6;
+options.AbsTol = 1e-6;
+options.MStateDependence = 'none';
 
-options.Mass=p.M();
-options.RelTol=1e-6;
-options.AbsTol=1e-6;
-options.MStateDependence='none';
+%% Load dataset 
+inputFileName = 'dataset_100_251117_v06';
+[u_traj, ~] = loadMatFile([inputFileName,'_inputs.mat'], [], p.inputs.variableNames);
+uInterpolant_pp = griddedInterpolant(u_traj.time, u_traj.data, 'pchip', 'nearest');
 
-%% 2) Load model-input dataset
-inputFileName   = 'dataset_100_251117_v06';
-outputFileName_in = [inputFileName,'_inputs'];
-rangeRows = [];
-
-[u_traj, u_traj_info] = loadMatFile([outputFileName_in,'.mat'], ...
-    rangeRows, p.inputs.variableNames);
-uInterpolant_pp = griddedInterpolant(u_traj.time, u_traj.data, ...
-    'pchip','nearest');
-
-%% 3) Compute Initial steady state
-% testbench initial input
 in1 = [2.1, 560, 30, 70, 2.3, 164.73, 30, 70, 70, 0, 426, 2.7, 2.4];
-initialInput= p.testbench2struct(in1.');
-x0 = steady_state_PEMFC(p, initialInput,options);
-u0 = u_traj.data(1,:).';
+initialInput = p.testbench2struct(in1.');
+x0 = steady_state_PEMFC(p, initialInput, options);
 tspan = u_traj.time;
 U = u_traj.data;
-if size(U,1) ~= numel(tspan)
-    U = U.';
-end
-%% 4) Input values from interpolent
+if size(U,1) ~= numel(tspan); U = U.'; end
+
+%% Simulate nonlinear DAE
 u = @(t) uInterpolant_pp(t).';
-
-
-%% 7) Simulate DAE with input trajectory
 [t, x] = ode15s(@(t,x) ode_PEMFC(t,x,u(t)), tspan, x0, options);
 
-%% 8) Compute outputs
 N = size(x,1);
-y = zeros(N, 2);   
-
+y = zeros(N,2);
 for k = 1:N
     y(k,:) = sys_output_wrapper(x(k,:).', U(k,:).', p).';
 end
-%% 8.1 Data Normalization
+
+%% 6.1 compute means and std
 mu_u = mean(U,1); sigma_u = std(U,1);
 mu_y = mean(y,1); sigma_y = std(y,1);
-
 % guard against any zero-variance columns
 sigma_u(sigma_u == 0) = 1;
 sigma_y(sigma_y == 0) = 1;
 
-normalize_u = @(U) (U - mu_u) ./ sigma_u;
-normalize_y = @(Y) (Y - mu_y) ./ sigma_y;
-
-U_Normalized = normalize_u(U);
-y_Normalized = normalize_y(y);
-
+%normalize_u = @(U) (U - mu_u) ./ sigma_u;
+%normalize_y = @(Y) (Y - mu_y) ./ sigma_y;
+%U_Normalized = normalize_u(U);
+%y_Normalized = normalize_y(y);
 fprintf('\nPer-channel training stats (mean, std):\n');
 fprintf('  y1 (T_S(10))    : mean=%.3g, std=%.3g\n', mu_y(1), sigma_y(1));
 fprintf('  y2 (a_H2O_avg)  : mean=%.3g, std=%.3g\n', mu_y(2), sigma_y(2));
-%% 9) Estimated linear model
+
+%% Identify linear model (N4SID, raw physical units) 
+% The issue is mainly in this section, I can't get a fitting higher than
+% 52% for y2 (a_H2O_AVG)
 
 Ts = 1;
+nx = 10:30;
+horizons = [5 15 15];
 
-nx = 7:20;  
-opt = n4sidOptions('Focus','simulation','N4Horizon',[30 30 30]);
-sys = n4sid(U_Normalized,y_Normalized,nx,'Ts',Ts,opt);
+data = iddata(y,U,Ts);
 
-A = sys.A;
-B = sys.B; 
-C = sys.C;
-D = sys.D;
+%OPT = ssestOptions( 'Focus','simulation', ...
+%  'EnforceStability', false);
+%OPT.OutputWeight =diag([0.1,1]);
+opt = n4sidOptions('N4Weight','CVA','Focus','simulation', ...
+    'N4Horizon','auto', 'EnforceStability',false, ...
+    'OutputWeight', diag(1./sigma_y.^2));
+[sys, x0_est] = n4sid(U, y, nx, 'Ts', Ts, opt);
+A = sys.A; B = sys.B; C = sys.C; D = sys.D;
+nx_id = size(A,1);
+%sys_refined = ssest(data,sys,OPT);  % refining the system
 
-ev_sys = eig(A);
-isStable = all(abs(ev_sys) < 1); % Stability condition for discrete-time systems 
+fprintf('Stable:       %d\n', all(abs(eig(A)) < 1));
+fprintf('Controllable: %d\n', rank(ctrb(A,B)) == nx_id);
+fprintf('Observable:   %d\n', rank(obsv(A,C)) == nx_id);
+fprintf('Model order:  %d\n', nx_id);
 
-% Display stability result
-if isStable
-    disp('The system is stable.');
-else
-    disp('The system is unstable.');
+% Linear vs nonlinear open-loop comparison
+
+y_lin = lsim(sys, U, t,x0_est);
+outNames = {'T_S(10) [K]','a_H2O_{avg} [-]'};
+figure('Name','Linear (N4SID) vs Nonlinear (DAE) open-loop response');
+for kk = 1:2
+    subplot(2,1,kk);
+    plot(t, y(:,kk), 'g', 'LineWidth', 1.2); hold on;
+    plot(t, y_lin(:,kk), 'r--', 'LineWidth', 1.2);
+    ylabel(outNames{kk}); xlabel('Time [s]');
+    legend('Nonlinear DAE','Linear (N4SID)');
 end
-% Display controllability result
+figure('Name','compare(): NRMSE fit, linear model vs nonlinear DAE data');
+compare(iddata(y, U, Ts), sys);
 
-isControllable = rank(ctrb(A,B)) == min(size(ctrb(A,B)));
-if isControllable
-    disp('The system is controllable.');
-else
-    disp('The system is uncontrollable.');
-end
-%Display observability result
+%% Role assignment
+idx_MV = [1 2 3 4 8];
+idx_MD = 11;
+idx_UD = [5 6 7 9 10];
+varNames = p.inputs.variableNames;
+fprintf('\nMV: %s\n', strjoin(varNames(idx_MV), ', '));
+fprintf('MD: %s\n', strjoin(varNames(idx_MD), ', '));
+fprintf('Fixed: %s\n', strjoin(varNames(idx_UD), ', '));
 
-isObservable = rank(obsv(A,C)) == min(size(obsv(A,C)));
-if isObservable
-    disp('The system is observable.');
-else
-    disp('The system is unobservable.');
-end
+nu = numel(idx_MV); nd = numel(idx_MD); ny = 2;
+Bu = B(:, idx_MV); Bd = B(:, idx_MD);
+Du = D(:, idx_MV); Dd = D(:, idx_MD);
+u_UD_nom = mean(U(:,idx_UD), 1);
 
-data_train = iddata(y,U,Ts);
-data_train_Normalized = iddata(y_Normalized,U_Normalized,Ts);
-%% 10) Validation Data set: different dataset, converted from testbench format
-[u_traj_val, ~] = loadMatFile('dataset_50_OP_250622_v04_inputs.mat', [], ...
-    p.testbench.variableNames);
+mv_bounds = [ 81.0  534.7;
+               1.03  127.0;
+              26.9  235.9;
+               0.92  139.5;
+             305.0  352.7];
+range_u = diff(mv_bounds, 1, 2);
 
-u_traj_val_model = testbenchTraj2inputTraj(u_traj_val, p);
+fprintf('Controllable (MVs only): %d\n', rank(ctrb(A,Bu)) == nx_id);
 
-initialInput_val = p.testbench2struct(u_traj_val.data(1,:).');
-x0_val = steady_state_PEMFC(p, initialInput_val, options);
+%% MPC – stripped-down first pass ( just to check if y2 is converging towards value near the op)
+plant = sys;
 
-uInterp_val = griddedInterpolant(u_traj_val_model.time, u_traj_val_model.data, ...
-    'pchip', 'nearest');
-[t_val, x_val] = ode15s(@(t,x) ode_PEMFC(t,x,uInterp_val(t).'), ...
-    u_traj_val_model.time, x0_val, options);
+% Explicitly mark which inputs are MVs, everything else as UD (ignored)
+allInputs = 1:size(B,2);              % 1:11
+idx_MV    = [1 2 3 4 8];              % your MVs
+idx_UDloc = setdiff(allInputs, idx_MV);
 
-U_val = u_traj_val_model.data;
-if size(U_val,1) ~= numel(t_val); U_val = U_val.'; end
+plant = setmpcsignals(plant, ...
+    'MV', idx_MV, ...
+    'UD', idx_UDloc);                 % no MD for this minimal test
 
-Nv = size(x_val,1);
-y_val = zeros(Nv,2);
-for k = 1:Nv
-    y_val(k,:) = sys_output_wrapper(x_val(k,:).', U_val(k,:).', p).';
-end
+p_horizon = 40;
+m_horizon = 10;
+mpcobj = mpc(plant, Ts, p_horizon, m_horizon);
 
-dt_val = mean(diff(t_val));
-if abs(dt_val - Ts) > 1e-9
-    warning('Held-out data sample spacing (%.3g s) differs from training (%.3g s).', dt_val, Ts);
-end
+% Very simple weights
+mpcobj.Weights.OutputVariables          = [1 1];
+mpcobj.Weights.ManipulatedVariables     = 0.01 * ones(1, numel(idx_MV));
+mpcobj.Weights.ManipulatedVariablesRate = 0.1  * ones(1, numel(idx_MV));
 
-U_val_d = U_val(1:Ts:end, :);
-y_val_d = y_val(1:Ts:end, :);
-
-% apply the SAME (training-derived) normalization
-U_val_n = normalize_u(U_val_d);
-y_val_n = normalize_y(y_val_d);
-
-data_val = iddata(y_val_d, U_val_d, Ts);
-data_val_n = iddata(y_val_n, U_val_n, Ts);
-
-
-%% 11) Compare: training fit (baseline) vs. Validation test fit (the real test)/ Inf Compare Horizont 
-figure('Name','Stage 0a (Inf Compare Horizont) - fit on TRAINING data (sanity baseline, expect high %)');
-compare(data_train_Normalized, sys);
-
-figure('Name','Stage 0b (Inf Compare Horizont) - fit on HELD-OUT data (the real generalization test)');
-compare(data_val_n, sys,1);
-[~, fit_val] = compare(data_val_n, sys);
-
-fprintf('\nHeld-out fit (NRMSE %%) per output channel [T_S(10), a_H2O_avg]:\n');
-disp(fit_val);
-
-%% 12) Compare: training fit (baseline) vs. Validation test fit (the real test)/ 1-step Compare Horizont 
-figure('Name','Stage 0a (1-step Compare Horizont) - fit on TRAINING data (sanity baseline, expect high %)');
-compare(data_train_Normalized, sys);
-
-figure('Name','Stage 0b (1-step Compare Horizont) - fit on HELD-OUT data (the real generalization test)');
-compare(data_val_n, sys,1);
-[~, fit_val_1_step] = compare(data_val_n, sys);
-
-fprintf('\nHeld-out fit (NRMSE %%) per output channel [T_S(10), a_H2O_avg]:\n');
-disp(fit_val_1_step);
-
-
-%% LQI closed-loop simulation on one reduced model
-
-nk = size(A,1);
-ny = size(C,1);
-nu = size(B,2);
-
-Aaug = [A zeros(nk,ny);
-    -C zeros(ny,ny)];
-Baug = [B;
-    -D];
-Caug = [C zeros(ny,ny)];
-
-isControllableaug = rank(ctrb(Aaug,Baug)) == min(size(ctrb(Aaug,Baug)));
-if isControllableaug
-    disp('The system is controllable.');
-else
-    disp('The system is uncontrollable.');
+% No manual ScaleFactor tuning at this stage
+% (let MPC auto-scale internally)
+for i = 1:numel(idx_MV)
+    mpcobj.MV(i).Min = mv_bounds(i,1);
+    mpcobj.MV(i).Max = mv_bounds(i,2);
 end
 
-isObservableaug = rank(obsv(Aaug,Caug)) == min(size(obsv(Aaug,Caug)));
-% Display observability result
-if isObservableaug
-    disp('The system is observable.');
-else
-    disp('The system is unobservable.');
+review(mpcobj);   % just to make sure it's still OK
+
+%Test 1: hold at nominal, then small step in y1
+Tsim1 = 2000;
+r_nom   = mu_y;                    % [mu_y1, mu_y2]
+r1_traj = repmat(r_nom, Tsim1, 1);
+
+[y1, t1, u1] = sim(mpcobj, Tsim1, r1_traj);  % default initial state
+
+figure('Name','Test 1: Small step around nominal');
+for kk = 1:2
+    subplot(2,1,kk);
+    plot(t1, y1(:,kk), 'b','LineWidth',1.2); hold on;
+    yline(r_nom(kk),'k--');
+    ylabel(outNames{kk}); xlabel('Time [s]');
+    legend('Output','Reference');
+end
+%% MPC object with tuning 
+plant= sys;
+plant= setmpcsignals(plant,'MV',idx_MV,'MD',idx_MD,'UD',idx_UD);
+plant.InputGroup.Unmeasured = idx_UD;  % or exclude them from disturbance estimation
+p_horizon = 30;   % Prediction horizon
+m_horizon = 5;    % Control horizon
+mpcobj = mpc(plant, Ts, p_horizon, m_horizon);
+
+mpcobj.Weights.OutputVariables = 1 ./ sigma_y;
+mpcobj.Weights.ManipulatedVariables      = 0.01 * ones(1, nu);    % small usage penalty
+mpcobj.Weights.ManipulatedVariablesRate  = 0.1 ./ range_u(:)';    % keep these
+mpcobj.Weights.ManipulatedVariablesRate = 20 * mpcobj.Weights.ManipulatedVariablesRate;
+for i = 1:nu
+    mpcobj.MV(i).ScaleFactor = range_u(i);
+end
+mpcobj.OV(1).ScaleFactor = sigma_y(1);
+mpcobj.OV(2).ScaleFactor = sigma_y(2);
+for i = 1:numel(idx_MV)
+    mpcobj.MV(i).Min = mv_bounds(i,1);
+    mpcobj.MV(i).Max = mv_bounds(i,2);
+end
+review(mpcobj);             % sanity check
+mpcstate_obj = mpcstate(mpcobj);
+
+%% Set point tracking on linear system
+Tsim1 = 2000;
+r1 = [mu_y(1)+2*sigma_y(1), mu_y(2)+0.5*sigma_y(2)];  % step change in both refs
+r1_traj = repmat(r1, Tsim1, 1);
+simopt = mpcsimopt(mpcobj);
+simopt.PlantInitialState = x0_est;     % nominal linear state matching mu_y
+simopt.MVSignal = [];                  % leave default unless you want open-loop MV override
+
+[y1, t1, u1] = sim(mpcobj, Tsim1, r1_traj, [], simopt);
+
+figure('Name','Test 1: Setpoint Tracking');
+for kk = 1:2
+    subplot(2,1,kk);
+    plot(t1, y1(:,kk), 'b','LineWidth',1.2); hold on;
+    yline(r1(kk),'k--');
+    ylabel(outNames{kk}); xlabel('Time [s]');
+    legend('Output','Reference');
 end
 
-Qx = 0.5*eye(nk);
-Qi = 0.5*eye(ny);
-Q  = blkdiag(Qx, Qi);
-R  = 0.2*eye(nu);
+%% Disturbance rejection on linear system
+Tsim2 = 2000;
+r2_traj = repmat(mu_y, Tsim2, 1);        % hold at nominal steady output
+d2_traj = zeros(Tsim2,1);
+d2_traj(50:end) = mu_u(idx_MD) + 2*sigma_u(idx_MD);  % step disturbance in I_cell at t=50
 
-Kaug = lqr(Aaug, Baug, Q, R);
-Kx = Kaug(:,1:nk);
-Ki = Kaug(:,nk+1:end);
+[y2s, t2, u2s] = sim(mpcobj, Tsim2, r2_traj, d2_traj);
 
-%%
-% Closed-loop simulation setup
-Ts   = 100;
-Tend = 100000;
-t    = (0:Ts:Tend)';
-Nsim = numel(t);
-
-% Reference in deviation variables
-r = zeros(Nsim, ny);
-r(round(Nsim/3):end, :) = 1;   % step in both outputs, adjust as needed
-
-x  = zeros(nk,1);
-xi = zeros(ny,1);
-
-X = zeros(nk, Nsim);
-XI = zeros(ny, Nsim);
-Y = zeros(ny, Nsim);
-U = zeros(nu, Nsim);
-E = zeros(ny, Nsim);
-
-for k = 1:Nsim
-    y = C*x ;
-    e = r(k,:).' - y(:);
-
-    u = -Kx*x - Ki*xi;
-
-    X(:,k)  = x;
-    XI(:,k) = xi;
-    Y(:,k)  = y;
-    U(:,k)  = u;
-    E(:,k)  = e;
-
-    xdot  = A*x + B*u;
-    xidot = e;
-
-    if k < Nsim
-        x  = x  + Ts*xdot;
-        xi = xi + Ts*xidot;
-    end
+figure('Name','Test 2: Disturbance Rejection');
+for kk = 1:2
+    subplot(2,1,kk);
+    plot(t2, y2s(:,kk), 'r','LineWidth',1.2); hold on;
+    yline(mu_y(kk),'g--');
+    ylabel(outNames{kk}); xlabel('Time [s]');
+    legend('Output','Nominal Reference');
 end
 
-figure;
-subplot(3,1,1);
-plot(t, Y.', 'LineWidth', 1.2);
-grid on;
-ylabel('y');
-title('Closed-loop output tracking');
-
-subplot(3,1,2);
-plot(t, U.', 'LineWidth', 1.2);
-grid on;
-ylabel('u');
-
-subplot(3,1,3);
-plot(t, E.', 'LineWidth', 1.2);
-grid on;
-ylabel('e');
-xlabel('Time [s]');

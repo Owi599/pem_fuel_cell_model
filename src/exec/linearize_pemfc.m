@@ -41,6 +41,17 @@ initialInput2= p.testbench2struct(in1.');
 x0 = steady_state_PEMFC(p, initialInput2,options);
 %u02 =  testbench2model(initialInput2,p);
 
+%% Simulate nonlinear DAE
+tspan = u_traj_pp.time;
+
+u = @(t) uInterpolant_pp(t).';
+[t, x] = ode15s(@(t,x) ode_PEMFC(t,x,u(t)), tspan, x0, options);
+
+N = size(x,1);
+y = zeros(N,2);
+for k = 1:N
+    y(k,:) = sys_output_wrapper(x(k,:).', u_traj_pp.data(k,:).', p).';
+end
 %% 3) Nonlinear model and dimensions
 M  = full(p.M());
 f  = @(x,u) ode_PEMFC(0,x,u);
@@ -211,16 +222,34 @@ disp(size(D));
     else
         warning('Explicit model is not asymptotically stable; skipping balanced truncation.');
     end
-%% 12) LQI closed-loop simulation on one reduced model
+%%
 sysr = redsys{1};
 Ak = sysr.A;
 Bk = sysr.B;
 Ck = sysr.C;
 Dk = sysr.D;
-
 nk = size(Ak,1);
 ny = size(Ck,1);
 nu = size(Bk,2);
+%%
+% Linear vs nonlinear open-loop comparison
+
+y_lin = lsim(sysr, u_traj_pp.data, t);
+outNames = {'T_S(10) [K]','a_H2O_{avg} [-]'};
+figure('Name','Linear (Jacobian) vs Nonlinear (DAE) open-loop response');
+for kk = 1:2
+    subplot(2,1,kk);
+    plot(t, y(:,kk), 'g', 'LineWidth', 1.2); hold on;
+    plot(t, y_lin(:,kk), 'r--', 'LineWidth', 1.2);
+    ylabel(outNames{kk}); xlabel('Time [s]');
+    legend('Nonlinear DAE','Linear (N4SID)');
+end
+figure('Name','compare(): NRMSE fit, linear model vs nonlinear DAE data');
+compare(iddata(y, U, Ts), sys);
+
+
+%% 12) LQI closed-loop simulation on one reduced model
+
 
 % Augmented system for LQI
 Aaug = [Ak zeros(nk,ny);
