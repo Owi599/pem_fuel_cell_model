@@ -14,8 +14,11 @@ function ensure_ode_pemfc_fresh()
 %
 % This gives you the same safety as recompiling on every run, without
 % paying the codegen cost when nothing relevant has changed.
-
-    root = fileparts(fileparts(mfilename('fullpath')));  % adjust if needed
+    thisFile = mfilename('fullpath');
+    root = thisFile;
+    while ~isfolder(fullfile(root, 'bin')) && ~strcmp(root, fileparts(root))
+    root = fileparts(root);
+    end
     mexFiles = dir(fullfile(root, 'bin', 'ode_PEMFC.mex*'));
 
     if isempty(mexFiles)
