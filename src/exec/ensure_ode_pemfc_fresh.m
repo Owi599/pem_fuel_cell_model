@@ -1,25 +1,19 @@
 function ensure_ode_pemfc_fresh()
-% ENSURE_ODE_PEMFC_FRESH  Rebuild the ode_PEMFC MEX file only if stale.
-%
-% Call this once at the top of any exec script that relies on ode_PEMFC
-% being executed via its compiled MEX version (i.e. any script calling
-% ode_PEMFC(t,x,u) with 3 args, which MATLAB will route to the MEX file
-% instead of the .m source if one exists on the path).
-%
-% Compares the MEX file's modification time against every .m file under
-% src/ that could feed into the compiled call tree (model equations +
-% parameters). If any source file is newer than the MEX file -- or the
-% MEX file doesn't exist yet -- it reruns ode_PEMFC_CoderScript() to
-% rebuild it. Otherwise it does nothing (fast path, no recompile).
-%
-% This gives you the same safety as recompiling on every run, without
-% paying the codegen cost when nothing relevant has changed.
+% ENSURE_ODE_PEMFC_FRESH  Rebuild the ode_PEMFC MEX file if stale.
+
+
     thisFile = mfilename('fullpath');
     root = thisFile;
     while ~isfolder(fullfile(root, 'bin')) && ~strcmp(root, fileparts(root))
-    root = fileparts(root);
+        root = fileparts(root);
     end
-    mexFiles = dir(fullfile(root, 'bin', 'ode_PEMFC.mex*'));
+
+    if ~isfolder(fullfile(root, 'bin'))
+        error('[ensure_ode_pemfc_fresh] Could not locate a "bin" folder walking up from %s. Check project layout.', thisFile);
+    end
+
+    % Search recursively so this works regardless of exact MEX output location
+    mexFiles = dir(fullfile(root, '**', ['ode_PEMFC.' mexext]));
 
     if isempty(mexFiles)
         fprintf('[ensure_ode_pemfc_fresh] No compiled MEX found -- building it now.\n');
@@ -38,11 +32,16 @@ function ensure_ode_pemfc_fresh()
     % - src/state   (state2struct/struct2state helpers used inside p)
     % - src/util    (vec2struct/struct2vec helpers used inside p)
     watchDirs = {'src/model', 'src/param', 'src/state', 'src/util'};
-
     newestSrcTime = 0;
     newestSrcFile = '';
+
     for d = 1:numel(watchDirs)
-        files = dir(fullfile(root, watchDirs{d}, '*.m'));
+        fullDir = fullfile(root, watchDirs{d});
+        if ~isfolder(fullDir)
+            warning('[ensure_ode_pemfc_fresh] Watch directory not found: %s', fullDir);
+            continue;
+        end
+        files = dir(fullfile(fullDir, '*.m'));
         for f = 1:numel(files)
             if files(f).datenum > newestSrcTime
                 newestSrcTime = files(f).datenum;
@@ -56,12 +55,12 @@ function ensure_ode_pemfc_fresh()
                  '  Newest source change: %s (%s)\n', ...
                  '  Compiled MEX:         %s (%s)\n', ...
                  '  Rebuilding...\n'], ...
-                 newestSrcFile, datetime(newestSrcTime), ...
-                 mexPath, datetime(mexTime));
+                 newestSrcFile, datetime(newestSrcTime,'ConvertFrom','datenum'), ...
+                 mexPath, datetime(mexTime,'ConvertFrom','datenum'));
         rebuild();
     else
         fprintf('[ensure_ode_pemfc_fresh] MEX is up to date (%s). Skipping rebuild.\n', ...
-                datetime(mexTime));
+                datetime(mexTime,'ConvertFrom','datenum'));
     end
 end
 

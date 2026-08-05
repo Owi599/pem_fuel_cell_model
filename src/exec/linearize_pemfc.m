@@ -223,7 +223,7 @@ disp(size(D));
         warning('Explicit model is not asymptotically stable; skipping balanced truncation.');
     end
 %%
-sysr = redsys{1};
+sysr = redsys{2};
 Ak = sysr.A;
 Bk = sysr.B;
 Ck = sysr.C;
@@ -245,7 +245,7 @@ for kk = 1:2
     legend('Nonlinear DAE','Linear (N4SID)');
 end
 figure('Name','compare(): NRMSE fit, linear model vs nonlinear DAE data');
-compare(iddata(y, U, Ts), sys);
+compare(iddata(y, u_traj_pp.data, 1), sysr);
 
 
 %% 12) LQI closed-loop simulation on one reduced model

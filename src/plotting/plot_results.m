@@ -4,7 +4,7 @@ for kk = 1:size(y_log,2)
     subplot(size(y_log,2),1,kk);
     plot(t, y_log(:,kk), 'b','LineWidth',1.2); hold on; grid on;
     plot(t, r_phys(:,kk), 'k--');
-    ylabel(outNames{kk}); xlabel('Time [s]'); legend('Output','Reference');
+    ylabel(outNames{kk}, 'Interpreter','latex'); xlabel('Time [s]'); legend('Output','Reference');
 end
 if ~isempty(u_log)
     figure('Name',[figTitle ' — MVs']);

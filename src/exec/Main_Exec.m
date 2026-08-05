@@ -1,6 +1,6 @@
 %% Main Exec file
 close all; clear; clc;
-
+ensure_ode_pemfc_fresh();
 %% Load dataset
 inputFileName = 'dataset_100_251117_v06';
 initial_input = [2.1, 560, 30, 70, 2.3, 164.73, 30, 70, 70, 0, 426, 2.7, 2.4];
@@ -14,23 +14,26 @@ Ts = 1;
 A = sys.A; B = sys.B; C = sys.C; D = sys.D;
 nx_id = size(A,1);
 
-outNames = {'T_S(10) [K]','a_{H2O} avg [-]'};   % plain labels, no interpreter issues
+outNames = {'$T_S(z = 123.1 mm) [K]$','$\overline{a}_{H2O} [-]$'};   
 varNames = p.inputs.variableNames;
 
 %% Open-loop comparison
 y_lin = lsim(sys, U_Normalized, t, x0_est);
 figure('Name','Linear (N4SID) vs Nonlinear (DAE) open-loop response');
 for kk = 1:2
+    
     subplot(2,1,kk);
-    plot(t, y_Normalized(:,kk), 'g', 'LineWidth', 1.2); hold on;
-    plot(t, y_lin(:,kk), 'r--', 'LineWidth', 1.2);
-    ylabel(outNames{kk}); xlabel('Time [s]');
-    legend('Nonlinear DAE','Linear (N4SID)');
+    plot(t, y_Normalized(:,kk), 'g', 'LineWidth', 2); hold on;grid on;
+    plot(t, y_lin(:,kk), 'r--', 'LineWidth', 2);
+    ax = gca;
+    ax.FontSize= 20;
+    ylabel(outNames{kk},'FontSize',24,'FontWeight','bold','Interpreter','latex'); 
+    xlabel('Time [s]','FontSize',24,'FontWeight','bold','Interpreter','latex');
+    legend('Nonlinear DAE','Linear (N4SID)','FontSize',18,'FontWeight','bold','Location','best');
 end
 data = iddata(y_Normalized, U_Normalized, Ts);
 figure('Name','compare(): NRMSE fit');
 compare(data, sys);
-
 %% Role assignment printout
 fprintf('\nMV: %s\n', strjoin(varNames(idxMV), ', '));
 fprintf('MD: %s\n', strjoin(varNames(idxMD), ', '));
@@ -58,7 +61,7 @@ for kk = 1:2
     subplot(2,1,kk);
     plot(t1, y1(:,kk), 'b','LineWidth',1.2); hold on; grid on;
     yline(r1(kk),'k--');
-    ylabel(outNames{kk}); xlabel('Time [s]');
+    ylabel(outNames{kk}, 'Interpreter','latex'); xlabel('Time [s]');
     legend('Output','Reference');
 end
 
@@ -74,11 +77,11 @@ for kk = 1:2
     subplot(2,1,kk);
     plot(t2, y2s(:,kk), 'r','LineWidth',1.2); hold on; grid on;
     yline(r2(kk),'g--');
-    ylabel(outNames{kk}); xlabel('Time [s]');
+    ylabel(outNames{kk}, 'Interpreter','latex'); xlabel('Time [s]');
     legend('Output','Nominal Reference');
 end
 
-%% Switch to custom estimator ONLY now, for nonlinear tests
+%% Switch to custom estimator for nonlinear tests and build Kalman gains
 setEstimator(mpcobj, 'custom');
 Qkf = 1e-4*eye(nx_id);
 Rkf = 1e-4*eye(ny);
@@ -134,7 +137,7 @@ md_nom = u0(idxMD);
 
 md_min = prctile(U(:,idxMD), 5);
 md_max = prctile(U(:,idxMD), 95);
-step_amp = 0.15 * (md_max - md_min);
+step_amp = 0.05 * (md_max - md_min);
 
 % Clip so the disturbed value never leaves the [md_min, md_max] envelope
 up_val   = min(md_nom + step_amp, md_max);

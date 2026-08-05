@@ -41,14 +41,14 @@ u0 = u0(:);
 iCellCol = find(strcmp(p.inputs.variableNames, 'I_cell'));
 
 %% 3) Target current loads
-targetI = [0.0162, 1, 2, 3, 4, 5,5.76];
+targetI = [0.0162, 1, 2, 3, 4, 5,6,7,8];
 
 %% 4) Compute steady-state simulation for each target current 
-Tramp = 2000; % [s] ramp duration for I_cell
-Tss   = 4000; % [s] additional hold time to reach steady-state
+Tramp = 500; % [s] ramp duration for I_cell
+Tss   = 5000; % [s] additional hold time to reach steady-state
 Ttot  = Tramp + Tss;
 
-nCols    = 80;   % 4 * p.N (anode, cathode, average, lambda_m)
+nCols    = 60;   %  3 * p.N (anode, cathode, average humidity)
 y        = zeros(numel(targetI),nCols);
 x_ss_all = zeros(numel(targetI),numel(x0));
 
@@ -74,31 +74,31 @@ for i = 1:numel(targetI)
     x_ss_all(i,:) = x_ss.';
     y(i,:) = sys_output_wrapper_Analysis(x_ss, u_target, p).';
 end
-
 zPos = (1:p.N) * p.delta_z * 1000;   % physical channel position [mm]
+
 %% 5) Visualization
 for i = 1:numel(targetI)
     aA   = y(i, 1:20);
     aC   = y(i, 21:40);
     aAvg = y(i, 41:60);
-    lam  = y(i, 61:80);
 
     figure('Name', sprintf('Humidity, I_cell = %.3f A', targetI(i)));
 
-    yyaxis left;
-    plot(zPos, aA, '-og', 'DisplayName', '$a^A_{H_2O}$'); hold on;
-    plot(zPos, aC, '-sc', 'DisplayName', '$a^C_{H_2O}$');
-    plot(zPos, aAvg, '--m', 'DisplayName', '$\overline{a}_{H_2O}$');
-    yline(1, ':k', 'saturation (a=1)', 'DisplayName', 'saturation limit');
-    ylabel('Water activity / relative humidity [-]');
-
-    yyaxis right;
-    plot(zPos, lam, '-.o', 'DisplayName', '$\lambda_m$', 'LineWidth', 1.3);
-    ylabel('Membrane water content \lambda_m [-]');
-
-    xlabel('Channel position z [mm]');
-    title(sprintf('Along-channel humidity & membrane hydration (%s), I_{cell} = %.3f A -- fixed operating point, current-only sweep', ...
-        flowLabel, targetI(i)));
-    legend('Location', 'best', 'Interpreter', 'latex');
+    plot(zPos, aA, '-og', 'DisplayName', '$a^A_{H_2O}$','LineWidth',2); hold on;
+    plot(zPos, aC, '-sb', 'DisplayName', '$a^C_{H_2O}$','LineWidth',2);
+    plot(zPos, aAvg, '--k', 'DisplayName', '$\overline{a}_{H_2O}$','LineWidth',2.5);
+   
+    ax = gca;
+    ax.FontSize = 20;
+    ax.FontWeight= 'bold';
+    %yline(1, ':k', 'saturation (a=1)', 'DisplayName', 'saturation limit');
+    ylabel('Relative humidity [-]','FontSize',28,'FontWeight','bold');
+   
+    xlabel('Channel position z [mm]','FontSize',28,'FontWeight','bold');
+    title(sprintf('Relative humidity (z) (%s) with I_{cell} = %.2f A', ...
+        flowLabel, targetI(i)),'FontSize',28,'FontWeight','bold');
+    legend('Location', 'best', 'Interpreter', 'latex','FontSize',24,'FontWeight','bold');
     grid on;
+    fileName=sprintf('%s_I_cell_%.2f.svg',flowLabel,targetI(i));
+        exportgraphics(ax,sprintf('%s',fileName),'Resolution',600)
 end
