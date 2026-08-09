@@ -1,10 +1,7 @@
 % Humidity Analysis around the Operating Point
 % 0) Set Up
 close all; clear; clc;
-%%
-ensure_ode_pemfc_fresh(); % making sure the mex execution file is up to 
-                          % date to avoid overwriting custom parameters
-                          % by the default
+ensure_ode_pemfc_fresh(); 
 
 %% 1) Parameters and options
 p = mod_param_PEMFC();
@@ -75,8 +72,17 @@ for i = 1:numel(targetI)
     y(i,:) = sys_output_wrapper_Analysis(x_ss, u_target, p).';
 end
 zPos = (1:p.N) * p.delta_z * 1000;   % physical channel position [mm]
+%% 5 ) Visualization Set up
+% Output folder for the current flow case
+    folderpath = fullfile( ...
+        'C:\Users\alsab\OneDrive\Desktop\UNI\Master\Master Thesis', ...
+        'pem_fuel_cell_model', 'res', 'Figures', flowLabel);
 
-%% 5) Visualization
+    % Create folder if it does not yet exist
+    if ~exist(folderpath, 'dir')
+        mkdir(folderpath);
+    end
+%% 6) Visualization
 for i = 1:numel(targetI)
     aA   = y(i, 1:20);
     aC   = y(i, 21:40);
@@ -99,6 +105,107 @@ for i = 1:numel(targetI)
         flowLabel, targetI(i)),'FontSize',28,'FontWeight','bold');
     legend('Location', 'best', 'Interpreter', 'latex','FontSize',24,'FontWeight','bold');
     grid on;
-    fileName=sprintf('%s_I_cell_%.2f.svg',flowLabel,targetI(i));
-        exportgraphics(ax,sprintf('%s',fileName),'Resolution',600)
+    
+
+    % Keep the desired file naming scheme
+    fileName = sprintf('%s_I_cell_%.2f.svg', flowLabel, targetI(i));
+    filepath = fullfile(folderpath, fileName);
+
+    % Export to the specified folder
+    exportgraphics(gcf, filepath, 'ContentType', 'vector');
 end
+%% 7) Combined anode humidity comparison across I_cell (color-coded)
+figure('Name', sprintf('Anode humidity comparison (%s)', flowLabel));
+cmap = turbo(numel(targetI));   % perceptually-uniform colormap, one color per current
+hold on;
+for i = 1:numel(targetI)
+    aA = y(i, 1:20);
+    plot(zPos, aA, '-o', 'Color', cmap(i,:), 'LineWidth', 2, ...
+        'MarkerFaceColor', cmap(i,:), 'MarkerSize', 4);
+end
+ax = gca;
+ax.FontSize = 20;
+ax.FontWeight = 'bold';
+ylabel('Anode relative humidity $a^A_{H_2O}$ [-]', 'FontSize', 26, ...
+    'FontWeight', 'bold', 'Interpreter', 'latex');
+xlabel('Channel position z [mm]', 'FontSize', 26, 'FontWeight', 'bold');
+title(sprintf('Anode humidity vs. channel position across $I_{cell}$ (%s)', flowLabel), ...
+    'FontSize', 26, 'FontWeight', 'bold', 'Interpreter', 'latex');
+grid on;
+
+colormap(cmap);
+cb = colorbar;
+cb.Label.String = 'I_{cell} [A]';
+cb.Label.FontSize = 22;
+cb.Label.FontWeight = 'bold';
+% Map colorbar ticks back to actual target currents rather than 1:N index
+clim([1, numel(targetI)]);
+cb.Ticks = 1:numel(targetI);
+cb.TickLabels = arrayfun(@(v) sprintf('%.2f', v), targetI, 'UniformOutput', false);
+
+fileNameAnode = sprintf('%s_anode_comparison_all_Icell.svg', flowLabel);
+filepathAnode = fullfile(folderpath, fileNameAnode);
+
+exportgraphics(gcf, filepathAnode, 'ContentType', 'vector');
+%% 7b) Combined cathode humidity comparison across I_cell (color-coded)
+figure('Name', sprintf('Cathode humidity comparison (%s)', flowLabel));
+hold on;
+for i = 1:numel(targetI)
+    aC = y(i, 21:40);
+    plot(zPos, aC, '-s', 'Color', cmap(i,:), 'LineWidth', 2, ...
+        'MarkerFaceColor', cmap(i,:), 'MarkerSize', 4);
+end
+ax = gca;
+ax.FontSize = 20;
+ax.FontWeight = 'bold';
+ylabel('Cathode relative humidity $a^C_{H_2O}$ [-]', 'FontSize', 26, ...
+    'FontWeight', 'bold', 'Interpreter', 'latex');
+xlabel('Channel position z [mm]', 'FontSize', 26, 'FontWeight', 'bold');
+title(sprintf('Cathode humidity vs. channel position across $I_{cell}$ (%s)', flowLabel), ...
+    'FontSize', 26, 'FontWeight', 'bold', 'Interpreter', 'latex');
+grid on;
+
+colormap(cmap);
+cb = colorbar;
+cb.Label.String = 'I_{cell} [A]';
+cb.Label.FontSize = 22;
+cb.Label.FontWeight = 'bold';
+clim([1, numel(targetI)]);
+cb.Ticks = 1:numel(targetI);
+cb.TickLabels = arrayfun(@(v) sprintf('%.2f', v), targetI, 'UniformOutput', false);
+
+fileNameCathode = sprintf('%s_cathode_comparison_all_Icell.svg', flowLabel);
+filepathCathode = fullfile(folderpath, fileNameCathode);
+
+exportgraphics(gcf, filepathCathode, 'ContentType', 'vector');
+%% 7c) Combined average humidity comparison across I_cell (color-coded)
+figure('Name', sprintf('Average humidity comparison (%s)', flowLabel));
+hold on;
+for i = 1:numel(targetI)
+    aAvg = y(i, 41:60);
+    plot(zPos, aAvg, '--d', 'Color', cmap(i,:), 'LineWidth', 2, ...
+        'MarkerFaceColor', cmap(i,:), 'MarkerSize', 4);
+end
+ax = gca;
+ax.FontSize = 20;
+ax.FontWeight = 'bold';
+ylabel('Average relative humidity $\overline{a}_{H_2O}$ [-]', 'FontSize', 26, ...
+    'FontWeight', 'bold', 'Interpreter', 'latex');
+xlabel('Channel position z [mm]', 'FontSize', 26, 'FontWeight', 'bold');
+title(sprintf('Average humidity vs. channel position across $I_{cell}$ (%s)', flowLabel), ...
+    'FontSize', 26, 'FontWeight', 'bold', 'Interpreter', 'latex');
+grid on;
+
+colormap(cmap);
+cb = colorbar;
+cb.Label.String = 'I_{cell} [A]';
+cb.Label.FontSize = 22;
+cb.Label.FontWeight = 'bold';
+clim([1, numel(targetI)]);
+cb.Ticks = 1:numel(targetI);
+cb.TickLabels = arrayfun(@(v) sprintf('%.2f', v), targetI, 'UniformOutput', false);
+
+fileNameAvg = sprintf('%s_average_comparison_all_Icell.svg', flowLabel);
+filepathAvg = fullfile(folderpath, fileNameAvg);
+
+exportgraphics(gcf, filepathAvg, 'ContentType', 'vector');
