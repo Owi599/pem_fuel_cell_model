@@ -28,16 +28,35 @@ for k = 1:N
     y(k,:) = sys_output_wrapper(x(k,:).', U(k,:).', p).';
 end
 
-mu_u = mean(U,1); sigma_u = std(U,1); sigma_u(sigma_u==0) = 1;
-mu_y = mean(y,1); sigma_y = std(y,1); sigma_y(sigma_y==0) = 1;
+b_u = U(1,:);
+b_y = y(1,:);
 
-U_n = (U - mu_u) ./ sigma_u;
-y_n = (y - mu_y) ./ sigma_y;
+sc_u= [1000, 1000, 1000, 1000, 1000, 100, 100, 100, ...
+        100000, 100000, 1];
+sc_y= [100, 1];
 
-Ts = 1;
-opt = n4sidOptions('N4Weight','auto','Focus','prediction', ...
-    'N4Horizon',[11 100 100], 'EnforceStability',true, 'InitialState','zero');
-[sys, x0_est] = n4sid(U_n, y_n, 10:20, 'Ts', Ts, opt);
+assert(numel(sc_u) == size(U,2), ...
+    'sc_u must contain exactly one scale factor for every input.');
+assert(numel(sc_y) == size(y,2), ...
+    'sc_y must contain exactly one scale factor for every output.');
+assert(all(sc_u > 0) && all(sc_y > 0), ...
+    'All normalization scale factors must be strictly positive.');
+
+U_n = (U - b_u) ./ sc_u;
+y_n = (y - b_y) ./ sc_y;
+
+mu_u = b_u;
+sigma_u = sc_u;
+mu_y = b_y;
+sigma_y = sc_y;
+
+Ts = mean(diff(t));
+assert(all(abs(diff(t) - Ts) < 1e-10), ...
+    'N4SID requires a uniformly sampled dataset.');
+
+opt = n4sidOptions('N4Weight','auto','Focus','simulation', ...
+    'N4Horizon',[20 40 40], 'EnforceStability',true, 'InitialState','zero','OutputWeight',diag([0.3,1]));
+[sys, x0_est] = n4sid(U_n, y_n, 6, 'Ts', Ts, opt);
 sys.UserData.x0_est = x0_est;   % stash for later reuse instead of a separate output
 sys.UserData.t = t; sys.UserData.U_n = U_n; sys.UserData.y_n = y_n;  % for diagnostics/plots
 
