@@ -30,7 +30,7 @@ targetI = [0.0162, 1, 2, 3, 4, 5, 6, 7, 8];
 Tramp = 500;
 Tss   = 5000;
 Ttot  = Tramp + Tss;
-nCols = 60;
+nCols = 100;
 y        = zeros(numel(targetI), nCols);
 x_ss_all = zeros(numel(targetI), numel(x0));
 
@@ -66,16 +66,20 @@ for i = 1:numel(targetI)
     aA   = y(i, 1:20);
     aC   = y(i, 21:40);
     aAvg = y(i, 41:60);
+    aCa  = y(i, 61:80);
+    aCc  = y(i, 81:100);
     figure('Name', sprintf('Humidity, I_cell = %.3f A', targetI(i)));
-    plot(zPos, aA, '-og', 'DisplayName', '$a^A_{H_2O}$', 'LineWidth', 2); hold on;
-    plot(zPos, aC, '-sb', 'DisplayName', '$a^C_{H_2O}$', 'LineWidth', 2);
-    plot(zPos, aAvg, '--k', 'DisplayName', '$\overline{a}_{H_2O}$', 'LineWidth', 2.5);
+    plot(zPos, aA,   '-og',  'DisplayName', '$a^A_{H_2O}$',  'LineWidth', 2); hold on;
+    plot(zPos, aC,   '-sb',  'DisplayName', '$a^C_{H_2O}$',  'LineWidth', 2);
+    plot(zPos, aAvg, '--k',  'DisplayName', '$\overline{a}_{H_2O}$', 'LineWidth', 2.5);
+    plot(zPos, aCa,  ':^',   'Color', [0.8500 0.3250 0.0980],  'DisplayName', '$a^{ca}_{H_2O}$', 'LineWidth', 1.5);
+    plot(zPos, aCc,  ':v',   'Color', [0.4940 0.1840 0.5560],  'DisplayName', '$a^{cc}_{H_2O}$', 'LineWidth', 1.5);
     ax = gca; ax.FontSize = 20; ax.FontWeight = 'bold';
     ylabel('Relative humidity [-]', 'FontSize', 28, 'FontWeight', 'bold');
     xlabel('Channel position z [mm]', 'FontSize', 28, 'FontWeight', 'bold');
     title(sprintf('Relative humidity (z) (%s) with I_{cell} = %.2f A', ...
         flowLabel, targetI(i)), 'FontSize', 28, 'FontWeight', 'bold');
-    legend('Location', 'best', 'Interpreter', 'latex', 'FontSize', 24, 'FontWeight', 'bold');
+    legend('Location', 'best', 'Interpreter', 'latex', 'FontSize', 20, 'FontWeight', 'bold','Orientation','horizontal');
     grid on;
     fileName = sprintf('%s_I_cell_%.2f.svg', flowLabel, targetI(i));
     exportgraphics(gcf, fullfile(folderpath, fileName), 'ContentType', 'vector');
@@ -141,7 +145,45 @@ clim([1, numel(targetI)]); cb.Ticks = 1:numel(targetI);
 cb.TickLabels = arrayfun(@(v) sprintf('%.2f', v), targetI, 'UniformOutput', false);
 exportgraphics(gcf, fullfile(folderpath, sprintf('%s_average_comparison_all_Icell.svg', flowLabel)), 'ContentType', 'vector');
 
-%% 8) Crossover analysis 
+% 7d) Anode membrane interface
+figure('Name', sprintf('Anode membrane interface RH comparison (%s)', flowLabel));
+hold on;
+for i = 1:numel(targetI)
+    plot(zPos, y(i,61:80), '-^', 'Color', cmap(i,:), 'LineWidth', 2, ...
+        'MarkerFaceColor', cmap(i,:), 'MarkerSize', 4);
+end
+ax = gca; ax.FontSize = 20; ax.FontWeight = 'bold';
+ylabel('Anode membrane interface RH $a^{ca}_{H_2O}$ [-]', 'FontSize', 26, 'FontWeight', 'bold', 'Interpreter', 'latex');
+xlabel('Channel position z [mm]', 'FontSize', 26, 'FontWeight', 'bold');
+title(sprintf('Anode membrane interface RH vs. channel position across $I_{cell}$ (%s)', flowLabel), ...
+    'FontSize', 26, 'FontWeight', 'bold', 'Interpreter', 'latex');
+grid on;
+colormap(cmap); cb = colorbar;
+cb.Label.String = 'I_{cell} [A]'; cb.Label.FontSize = 22; cb.Label.FontWeight = 'bold';
+clim([1, numel(targetI)]); cb.Ticks = 1:numel(targetI);
+cb.TickLabels = arrayfun(@(v) sprintf('%.2f', v), targetI, 'UniformOutput', false);
+exportgraphics(gcf, fullfile(folderpath, sprintf('%s_anode_membrane_comparison_all_Icell.svg', flowLabel)), 'ContentType', 'vector');
+
+% 7e) Cathode membrane interface
+figure('Name', sprintf('Cathode membrane interface RH comparison (%s)', flowLabel));
+hold on;
+for i = 1:numel(targetI)
+    plot(zPos, y(i,81:100), '-v', 'Color', cmap(i,:), 'LineWidth', 2, ...
+        'MarkerFaceColor', cmap(i,:), 'MarkerSize', 4);
+end
+ax = gca; ax.FontSize = 20; ax.FontWeight = 'bold';
+ylabel('Cathode membrane interface RH $a^{cc}_{H_2O}$ [-]', 'FontSize', 26, 'FontWeight', 'bold', 'Interpreter', 'latex');
+xlabel('Channel position z [mm]', 'FontSize', 26, 'FontWeight', 'bold');
+title(sprintf('Cathode membrane interface RH vs. channel position across $I_{cell}$ (%s)', flowLabel), ...
+    'FontSize', 26, 'FontWeight', 'bold', 'Interpreter', 'latex');
+grid on;
+colormap(cmap); cb = colorbar;
+cb.Label.String = 'I_{cell} [A]'; cb.Label.FontSize = 22; cb.Label.FontWeight = 'bold';
+clim([1, numel(targetI)]); cb.Ticks = 1:numel(targetI);
+cb.TickLabels = arrayfun(@(v) sprintf('%.2f', v), targetI, 'UniformOutput', false);
+exportgraphics(gcf, fullfile(folderpath, sprintf('%s_cathode_membrane_comparison_all_Icell.svg', flowLabel)), 'ContentType', 'vector');
+
+%% 8) Crossover analysis
 nI = numel(targetI);
 
 % 8a) Anode–cathode crossover (per current, within-current comparison)
@@ -183,6 +225,18 @@ for i = 1:nI-1
 end
 disp(ccTable);
 writetable(ccTable, fullfile(folderpath, sprintf('%s_cathode_cathode_crossovers.csv', flowLabel)));
+
+% 8d) Membrane-interface crossover (anode-side vs. cathode-side, per current)
+mcTable = table();
+for i = 1:nI
+    [zc, vc] = find_crossovers(zPos, y(i,61:80), y(i,81:100));
+    for k = 1:numel(zc)
+        mcTable = [mcTable; table(targetI(i), zc(k), vc(k), ...
+            'VariableNames', {'I_cell_A','z_mm','a_H2O'})];
+    end
+end
+disp(mcTable);
+writetable(mcTable, fullfile(folderpath, sprintf('%s_membrane_crossovers.csv', flowLabel)));
 
 %% 9) Peak-tracking analysis (anode)
 peakVal = zeros(nI,1);
@@ -238,17 +292,17 @@ exportgraphics(gcf, fullfile(folderpath, sprintf('%s_anode_peak_combined_vs_Icel
 
 %% Helper Function
 function [zCross, valCross] = find_crossovers(zPos, curve1, curve2)
-    d = curve1(:) - curve2(:);
-    signChange = find(diff(sign(d)) ~= 0);
-    zCross = zeros(numel(signChange),1);
-    valCross = zeros(numel(signChange),1);
-    for k = 1:numel(signChange)
-        i = signChange(k);
-        z1 = zPos(i);   z2 = zPos(i+1);
-        d1 = d(i);      d2 = d(i+1);
-        frac = -d1 / (d2 - d1);
-        zCross(k) = z1 + frac*(z2 - z1);
-        v1 = curve1(i); v2 = curve1(i+1);
-        valCross(k) = v1 + frac*(v2 - v1);
-    end
+d = curve1(:) - curve2(:);
+signChange = find(diff(sign(d)) ~= 0);
+zCross = zeros(numel(signChange),1);
+valCross = zeros(numel(signChange),1);
+for k = 1:numel(signChange)
+    i = signChange(k);
+    z1 = zPos(i);   z2 = zPos(i+1);
+    d1 = d(i);      d2 = d(i+1);
+    frac = -d1 / (d2 - d1);
+    zCross(k) = z1 + frac*(z2 - z1);
+    v1 = curve1(i); v2 = curve1(i+1);
+    valCross(k) = v1 + frac*(v2 - v1);
+end
 end

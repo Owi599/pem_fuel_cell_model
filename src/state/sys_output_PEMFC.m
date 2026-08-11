@@ -77,6 +77,18 @@ yStruct.c_H2O_c = xStruct.c_H2O_c;
 yStruct.c_H2O_a = xStruct.c_H2O_a;
 yStruct.a_H2O_avg = 0.5 * (yStruct.a_H2O_a_out + yStruct.a_H2O_c_out);
 
+% --------------------------------------------------------------------------------------
+% relative humidity at the two membrane interfaces (anode-side and cathode-side)
+% mirrors the calculation in membrane.m, including the same smoothmax
+% clipping applied there, so the reported values match what actually
+% drives the membrane water flux rather than an unclipped surrogate
+scaling = 300;
+a_H2O_ca_raw = (xStruct.xi_H2O_ca .* xStruct.p_a) ./ p.p_sat(xStruct.T_s);
+a_H2O_cc_raw = (xStruct.xi_H2O_cc .* xStruct.p_c) ./ p.p_sat(xStruct.T_s);
+
+yStruct.a_H2O_ca_z = -smoothmax(-a_H2O_ca_raw, -0.97, scaling);
+yStruct.a_H2O_cc_z = -smoothmax(-a_H2O_cc_raw, -0.97, scaling);
+
 yStruct.a_H2O_avg_z = 0.5 * (yStruct.a_H2O_a_out_z + yStruct.a_H2O_c_out_z);
 
 y_meas = [ ...
@@ -96,7 +108,8 @@ y_ctrl = [yStruct.T_S(10);
 y_Analysis = [yStruct.a_H2O_a_out_z;
     yStruct.a_H2O_c_out_z;
     yStruct.a_H2O_avg_z%;
-    %yStruct.Lambda
+    yStruct.a_H2O_ca_z;
+    yStruct.a_H2O_cc_z
     ];
 end
 
