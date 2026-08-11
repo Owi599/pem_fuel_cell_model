@@ -55,8 +55,8 @@ assert(all(abs(diff(t) - Ts) < 1e-10), ...
     'N4SID requires a uniformly sampled dataset.');
 
 opt = n4sidOptions('N4Weight','auto','Focus','simulation', ...
-    'N4Horizon',[20 40 40], 'EnforceStability',true, 'InitialState','zero','OutputWeight',diag([0.3,1]));
-[sys, x0_est] = n4sid(U_n, y_n, 6, 'Ts', Ts, opt);
+    'N4Horizon',[10 40 40], 'EnforceStability',true, 'InitialState','zero','OutputWeight',diag([0.3,1]));
+[sys, x0_est] = n4sid(U_n, y_n, 12, 'Ts', Ts, opt);
 sys.UserData.x0_est = x0_est;   % stash for later reuse instead of a separate output
 sys.UserData.t = t; sys.UserData.U_n = U_n; sys.UserData.y_n = y_n;  % for diagnostics/plots
 

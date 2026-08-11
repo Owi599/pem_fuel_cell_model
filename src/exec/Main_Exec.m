@@ -8,25 +8,25 @@ Ts = 1;
 
 %% Linearize
 [sys, x0, x0_est, u0, mu_u, sigma_u, mu_y, sigma_y, U_Normalized, ...
- y_Normalized, t, idxMV, idxMD, idxUD, p, U] = ...
- linearize_pemfc_N4SID(inputFileName, initial_input);
+    y_Normalized, t, idxMV, idxMD, idxUD, p, U] = ...
+    linearize_pemfc_N4SID(inputFileName, initial_input);
 
 A = sys.A; B = sys.B; C = sys.C; D = sys.D;
 nx_id = size(A,1);
 
-outNames = {'$T_S(z = 123.1 mm) [K]$','$\overline{a}_{H2O} [-]$'};   
+outNames = {'$T^S(z = 123.1 mm) [K]$','$\overline{a}_{H2O} [-]$'};
 varNames = p.inputs.variableNames;
 %% Open-loop comparison
 y_lin = lsim(sys, U_Normalized, t, x0_est);
 figure('Name','Linear (N4SID) vs Nonlinear (DAE) open-loop response');
 for kk = 1:2
-    
+
     subplot(2,1,kk);
     plot(t, y_Normalized(:,kk), 'g', 'LineWidth', 2); hold on;grid on;
     plot(t, y_lin(:,kk), 'r--', 'LineWidth', 2);
     ax = gca;
     ax.FontSize= 20;
-    ylabel(outNames{kk},'FontSize',24,'FontWeight','bold','Interpreter','latex'); 
+    ylabel(outNames{kk},'FontSize',24,'FontWeight','bold','Interpreter','latex');
     xlabel('Time [s]','FontSize',24,'FontWeight','bold','Interpreter','latex');
     legend('Nonlinear DAE','Linear (N4SID)','FontSize',18,'FontWeight','bold','Location','best');
 end
@@ -44,10 +44,10 @@ Bu = B(:, idxMV); Bd = B(:, idxMD);
 
 %% Design MPC (default estimator — needed for linear sim tests)
 mv_bounds = [ 81.0  534.7;
-               1.03  127.0;
-              26.9  235.9;
-               0.92  139.5;
-             305.0  352.7];
+    1.03  127.0;
+    26.9  235.9;
+    0.92  139.5;
+    305.0  352.7];
 [mpcobj, mv_bounds_norm, range_u_norm] = design_mpc(sys, idxMV, idxMD, idxUD, mv_bounds, mu_u, sigma_u, Ts);
 
 %% Setpoint tracking on linear system
@@ -89,7 +89,6 @@ end
 
 %% Use MPC Toolbox built-in Kalman estimator for nonlinear tests
 
-% Optional: inspect the estimator gains computed by MPC Toolbox.
 [Lmpc, Mmpc, Aest, Cmest, Buest] = getEstimator(mpcobj);
 
 options.Mass = p.M();
@@ -105,71 +104,7 @@ resBase = run_nonlinear_test(mpcobj, sys, p, options,  idxMV, idxMD, ...
     mu_u, sigma_u, mu_y, sigma_y, mv_bounds_norm, x0, u0 , ...
     r_nl_traj, [], Ts);
 
-%% Scenario A: Simultaneous setpoint tracking on nonlinear plant
-Tsim_sp = 300;
-stepStart = 50;
 
-% Physical output deviations from the nominal operating point:
-% [temperature increment in K, water-activity increment]
-delta_r_phys = [7, 0.07];
-
-% Convert them to the normalized coordinates used by sys and mpcobj.
-delta_r_norm = delta_r_phys ./ sigma_y;
-
-% Reference is zero normalized deviation before the step.
-r_sp_traj = zeros(Tsim_sp, 2);
-
-% Apply both output references simultaneously from t = 50 s.
-r_sp_traj(stepStart:end,:) = repmat( ...
-    delta_r_norm, Tsim_sp - stepStart + 1, 1);
-
-% Nonlinear closed-loop simulation
-resA = run_nonlinear_test( ...
-    mpcobj, sys, p, options,  idxMV, idxMD, ...
-    mu_u, sigma_u, mu_y, sigma_y, mv_bounds_norm, ...
-    x0, u0,  r_sp_traj, [], Ts);
-
-% Convert reference for physical-unit plotting.
-r_sp_phys = r_sp_traj .* sigma_y + mu_y;
-t_sp = (0:Tsim_sp-1)' * Ts;
-
-plot_results( ...
-    t_sp, resA.y, r_sp_phys, resA.u, mv_bounds, ...
-    outNames, varNames(idxMV), ...
-    'Scenario A: Simultaneous Setpoint Tracking (Nonlinear Plant)');
-
-%% Scenario B: Disturbance rejection on nonlinear plant (data-scaled MD)
-r_d_traj = repmat(y_Normalized(1,:), 300, 1);
-md_nom = u0(idxMD);
-
-md_min = prctile(U(:,idxMD), 5);
-md_max = prctile(U(:,idxMD), 95);
-step_amp = 0.05 * (md_max - md_min);
-
-% Clip so the disturbed value never leaves the [md_min, md_max] envelope
-up_val   = min(md_nom + step_amp, md_max);
-down_val = max(md_nom - step_amp, md_min);
-
-d_phys_traj = repmat(md_nom, 300, 1);
-ramp_len = 10;
-up_ramp   = linspace(0, up_val - md_nom, ramp_len)';
-down_ramp = linspace(0, md_nom - down_val, ramp_len)';
-
-d_phys_traj(50:59)   = md_nom + up_ramp;
-d_phys_traj(60:119)  = up_val;
-d_phys_traj(120:129) = up_val - up_ramp;
-d_phys_traj(130:199) = down_val;
-d_phys_traj(200:209) = down_val + down_ramp;
-d_phys_traj(210:end) = md_nom;
-
-resB = run_nonlinear_test(mpcobj, sys, p, options,  idxMV, idxMD, ...
-    mu_u, sigma_u, mu_y, sigma_y, mv_bounds_norm, x0, u0, ...
-    r_d_traj, d_phys_traj, Ts);
-
-r_d_phys = r_d_traj .* sigma_y + mu_y;
-t_d = (0:299)'*Ts;
-plot_results(t_d, resB.y, r_d_phys, resB.u, mv_bounds, outNames, varNames(idxMV), ...
-    'Scenario B: Disturbance Rejection (Nonlinear Plant)');
 %% Scenario S0: Nominal regulation on nonlinear plant
 Tsim_S0 = 600;
 
@@ -187,15 +122,19 @@ r_S0_phys = r_S0_traj .* sigma_y + mu_y;
 
 % Physical time vector.
 t_S0 = (0:Tsim_S0-1).' * Ts;
+ytickformat('%.2f');
 
-% resS0.y and resS0.u should already be physical values, as in your
-% previous Scenario A/B calls.
+% Half-width of the displayed physical y-axis ranges:
+% [temperature in K, water activity]
+yHalfRange_S0 = [0.05, 0.005];
+
 plot_results( ...
     t_S0, resS0.y, r_S0_phys, resS0.u, mv_bounds, ...
     outNames, varNames(idxMV), ...
-    'Scenario S0: Nominal Regulation (Nonlinear Plant)');
+    'Scenario S0: Nominal Regulation (Nonlinear Plant)', ...
+    yHalfRange_S0);
 %% S1: Positive simultaneous setpoint step
-Tsim_S1 = 600;
+Tsim_S1 = 1500;
 kStep_S1 = 50;
 
 % Physical setpoint deviations from the nominal operating point.
@@ -219,9 +158,9 @@ t_S1 = (0:Tsim_S1-1).' * Ts;
 plot_results( ...
     t_S1, resS1.y, r_S1_phys, resS1.u, mv_bounds, ...
     outNames, varNames(idxMV), ...
-    'S1: Positive Simultaneous Setpoint Step');
+    'S1: Positive Simultaneous Setpoint Step',[]);
 %% S2: Negative simultaneous setpoint step
-Tsim_S2 = 600;
+Tsim_S2 = 1500;
 kStep_S2 = 50;
 
 % Equal-magnitude negative reference change.
@@ -239,13 +178,12 @@ resS2 = run_nonlinear_test( ...
 
 r_S2_phys = r_S2_traj .* sigma_y + mu_y;
 t_S2 = (0:Tsim_S2-1).' * Ts;
-
 plot_results( ...
     t_S2, resS2.y, r_S2_phys, resS2.u, mv_bounds, ...
     outNames, varNames(idxMV), ...
-    'S2: Negative Simultaneous Setpoint Step');
+    'S2: Negative Simultaneous Setpoint Step',[]);
 %% S3: Sequential MIMO setpoint tracking and coupling test
-Tsim_S3 = 900;
+Tsim_S3 = 1200;
 
 % Physical target deviations from the nominal operating point.
 deltaT_phys  = 1.0;     % K
@@ -284,7 +222,7 @@ t_S3 = (0:Tsim_S3-1).' * Ts;
 plot_results( ...
     t_S3, resS3.y, r_S3_phys, resS3.u, mv_bounds, ...
     outNames, varNames(idxMV), ...
-    'S3: Sequential Setpoint Tracking and MIMO Interaction');
+    'S3: Sequential Setpoint Tracking and MIMO Interaction',[]);
 %% S4: Measured-disturbance rejection on nonlinear PEMFC plant
 Tsim_S4 = 700;
 
@@ -333,9 +271,9 @@ t_S4 = (0:Tsim_S4-1).' * Ts;
 plot_results( ...
     t_S4, resS4.y, r_S4_phys, resS4.u, mv_bounds, ...
     outNames, varNames(idxMV), ...
-    'S4: Measured-Disturbance Rejection (Nonlinear Plant)');
+    'S4: Measured-Disturbance Rejection (Nonlinear Plant)',[]);
 %% S5: Unmeasured-disturbance rejection on nonlinear PEMFC plant
-Tsim_S5 = 700;
+Tsim_S5 = 900;
 
 % Maintain both outputs at the nominal physical operating point.
 r_S5_traj = zeros(Tsim_S5, 2);
@@ -382,7 +320,7 @@ t_S5 = (0:Tsim_S5-1).' * Ts;
 plot_results( ...
     t_S5, resS5.y, r_S5_phys, resS5.u, mv_bounds, ...
     outNames, varNames(idxMV), ...
-    sprintf('S5: Unmeasured Disturbance Rejection (%s)', varNames{jUD}));
+    sprintf('S5: Unmeasured Disturbance Rejection (%s)', varNames{jUD}),[]);
 %% S6: Constraint-handling test with restricted humidification authority
 Tsim_S6 = 700;
 kStep_S6 = 50;
@@ -461,4 +399,4 @@ end
 plot_results( ...
     t_S6, resS6.y, r_S6_phys, resS6.u, mv_bounds_S6, ...
     outNames, varNames(idxMV), ...
-    'S6: Constrained Humidity Tracking (Nonlinear Plant)');
+    'S6: Constrained Humidity Tracking (Nonlinear Plant)',[]);
