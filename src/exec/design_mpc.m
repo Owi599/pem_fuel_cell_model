@@ -11,14 +11,14 @@ plant = setmpcsignals(sys, ...
     'MD', idxMD, ...
     'UD', idxUD);
 
-mpcobj = mpc(plant, Ts, 100, 5);
+mpcobj = mpc(plant, Ts, 100, [2 3 5 10 30 50]);
 
 % Already normalized model: preserve unit scale factors.
 mpcobj.OV(1).ScaleFactor = 1;
 mpcobj.OV(2).ScaleFactor = 1;
 
 for i = 1:nu
-    mpcobj.MV(i).ScaleFactor = 0.5;
+    mpcobj.MV(i).ScaleFactor = range_u_norm(i);
 
     % Hard physical actuator limits.
     mpcobj.MV(i).Min = mv_bounds_norm(i,1);
@@ -38,13 +38,13 @@ for i = 1:nu
 end
 
 % Equal initial importance for temperature and humidity tracking.
-mpcobj.Weights.OutputVariables = [1,1];
+mpcobj.Weights.OutputVariables = [1,1.8];
 
 % Set this to zero initially to avoid deliberate output offset.
 mpcobj.Weights.ManipulatedVariables = zeros(1, nu);
 
 % Main damping parameter.
-mpcobj.Weights.ManipulatedVariablesRate = 4 * ones(1, nu);
+mpcobj.Weights.ManipulatedVariablesRate = [8, 16, 8,16, 8];  % heavier damping on MV2, MV4
 
 setEstimator(mpcobj, 'default');
 
