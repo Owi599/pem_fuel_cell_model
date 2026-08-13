@@ -44,7 +44,7 @@ mpcobj.Weights.OutputVariables = [1,1.8];
 mpcobj.Weights.ManipulatedVariables = zeros(1, nu);
 
 % Main damping parameter.
-mpcobj.Weights.ManipulatedVariablesRate = [8, 16, 8,16, 8];  % heavier damping on MV2, MV4
+mpcobj.Weights.ManipulatedVariablesRate = [9, 19, 10,19, 2];  % heavier damping on MV2, MV4
 
 setEstimator(mpcobj, 'default');
 

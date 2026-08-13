@@ -224,7 +224,7 @@ plot_results( ...
     outNames, varNames(idxMV), ...
     'S3: Sequential Setpoint Tracking and MIMO Interaction',[]);
 %% S4: Measured-disturbance rejection on nonlinear PEMFC plant
-Tsim_S4 = 700;
+Tsim_S4 = 1000;
 
 % Keep both controlled outputs at their nominal operating-point values.
 r_S4_traj = zeros(Tsim_S4, 2);
