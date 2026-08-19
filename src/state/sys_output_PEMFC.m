@@ -107,7 +107,7 @@ y_ctrl = [yStruct.T_S(10);
 
 y_Analysis = [yStruct.a_H2O_a_out_z;
     yStruct.a_H2O_c_out_z;
-    yStruct.a_H2O_avg_z%;
+    yStruct.a_H2O_avg_z;
     yStruct.a_H2O_ca_z;
     yStruct.a_H2O_cc_z
     ];

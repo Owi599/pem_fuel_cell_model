@@ -11,7 +11,7 @@ plant = setmpcsignals(sys, ...
     'MD', idxMD, ...
     'UD', idxUD);
 
-mpcobj = mpc(plant, Ts, 100, [2 3 5 10 30 50]);
+mpcobj = mpc(plant, Ts,30 , [2 3 5 10 30 50]);
 
 % Already normalized model: preserve unit scale factors.
 mpcobj.OV(1).ScaleFactor = 1;
@@ -25,8 +25,8 @@ for i = 1:nu
     mpcobj.MV(i).Max = mv_bounds_norm(i,2);
 
     % Initial actuator slew limits: ±1% of permitted range per sample.
-    mpcobj.MV(i).RateMin = -0.010 * range_u_norm(i);
-    mpcobj.MV(i).RateMax =  0.010 * range_u_norm(i);
+    mpcobj.MV(i).RateMin = -0.005 * range_u_norm(i);
+    mpcobj.MV(i).RateMax =  0.005 * range_u_norm(i);
 
     % Preserve physical magnitude limits as hard constraints.
     mpcobj.MV(i).MinECR = 0;
@@ -38,13 +38,13 @@ for i = 1:nu
 end
 
 % Equal initial importance for temperature and humidity tracking.
-mpcobj.Weights.OutputVariables = [1,1.8];
+mpcobj.Weights.OutputVariables = [1,1];
 
-% Set this to zero initially to avoid deliberate output offset.
+% Set to zero initially to avoid deliberate output offset.
 mpcobj.Weights.ManipulatedVariables = zeros(1, nu);
 
 % Main damping parameter.
-mpcobj.Weights.ManipulatedVariablesRate = [9, 19, 10,19, 2];  % heavier damping on MV2, MV4
+mpcobj.Weights.ManipulatedVariablesRate = [2.5000 10 2.5000 5 0.2500];  % heavier damping on MV2, MV4
 
 setEstimator(mpcobj, 'default');
 
